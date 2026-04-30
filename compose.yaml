@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    volumes:
+      - ./data:/app/data
+      # Strava export mounted read-only for the ingest CLI
+      - ./export_105894778(1) 2:/export:ro
+    environment:
+      CV_DATA_DIR: /app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+# Run a one-shot ingest with:
+#   docker compose run --rm backend python -m app.ingest /export
