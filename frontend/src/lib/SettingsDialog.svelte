@@ -159,6 +159,11 @@
           </select>
         </label>
         <label class="row inline">
+          Max. Herzfrequenz
+          <input type="number" min="60" max="250" step="1" bind:value={$settings.maxHR} placeholder="z. B. 190" />
+          bpm
+        </label>
+        <label class="row inline">
           Power-Anzeige
           <select bind:value={$settings.powerUnit}>
             <option value="W">Watt (W)</option>

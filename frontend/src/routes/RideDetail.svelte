@@ -133,6 +133,65 @@
   $: kcal = kcalPower ?? kcalHR;
   $: kcalSource = kcalPower != null ? "Power" : (kcalHR != null ? "HR·Keytel" : null);
 
+  // HR zone time computation (5 zones based on user's max HR setting)
+  $: hrZones = computeHRZones(hr, t, ride?.moving_s ?? 0);
+
+  // HR zone bands for chart background
+  $: hrZoneBands = hrZones?.map((z) => ({ from: z.fromBpm, to: z.toBpm, color: z.color })) ?? null;
+
+  function computeHRZones(hr: (number | null)[], t: number[], totalSeconds: number): { label: string; seconds: number; pct: number; color: string }[] | null {
+    const maxHR = $settings.maxHR;
+    if (maxHR == null || maxHR < 60) return null;
+
+    const thresholds = [0, 0.65, 0.75, 0.85, 0.95];
+    const zones = [
+      { label: "Z1", color: "#42a5f5", seconds: 0, pct: 0, fromBpm: 0, toBpm: Math.round(maxHR * thresholds[1]) - 1 },
+      { label: "Z2", color: "#66bb6a", seconds: 0, pct: 0, fromBpm: Math.round(maxHR * thresholds[1]), toBpm: Math.round(maxHR * thresholds[2]) - 1 },
+      { label: "Z3", color: "#ffee58", seconds: 0, pct: 0, fromBpm: Math.round(maxHR * thresholds[2]), toBpm: Math.round(maxHR * thresholds[3]) - 1 },
+      { label: "Z4", color: "#ff7043", seconds: 0, pct: 0, fromBpm: Math.round(maxHR * thresholds[3]), toBpm: Math.round(maxHR * thresholds[4]) - 1 },
+      { label: "Z5", color: "#ef5350", seconds: 0, pct: 0, fromBpm: Math.round(maxHR * thresholds[4]), toBpm: maxHR },
+    ];
+
+    for (let i = 0; i < hr.length; i++) {
+      const h = hr[i];
+      if (h == null || h < 30) continue;
+
+      const pct = h / maxHR;
+      let zoneIdx: number;
+      if (pct < 0.65) zoneIdx = 0;
+      else if (pct < 0.75) zoneIdx = 1;
+      else if (pct < 0.85) zoneIdx = 2;
+      else if (pct < 0.95) zoneIdx = 3;
+      else zoneIdx = 4;
+
+      const prev = i > 0 ? t[i] - t[i - 1] : 0;
+      const next = i < hr.length - 1 ? t[i + 1] - t[i] : 0;
+      let dt = (prev + next) / 2;
+      if (i === 0) dt = next;
+      if (i === hr.length - 1) dt = prev;
+      if (!isFinite(dt) || dt <= 0 || dt > 30) continue;
+
+      zones[zoneIdx].seconds += dt;
+    }
+
+    for (const z of zones) {
+      z.pct = totalSeconds > 0 ? (z.seconds / totalSeconds) * 100 : 0;
+    }
+
+    return zones;
+  }
+
+  function fmtZoneTime(seconds: number): string {
+    const r = Math.round(seconds);
+    if (r < 60) return `${r}s`;
+    const m = Math.floor(r / 60);
+    const s = r % 60;
+    if (m < 60) return `${m}min ${s}s`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return `${h}h ${rm}min`;
+  }
+
   $: syncKey = `ride-${id}`;
 
   function hasAny(arr: (number | null)[]): boolean {
@@ -243,7 +302,7 @@
       <div class="card kcal">
         <div class="card-title">Kalorien</div>
         <div class="card-value">{fmtNum(kcal, 0, " kcal")}</div>
-        <div class="card-sub">{kcalSource === "Power" ? "aus Power (η = 0,24)" : "aus HR (Keytel 2005)"}</div>
+        <div class="card-sub">{kcalSource === "Power" ? "aus Power (η = 0,24)" : "aus HR (Keytel 2005)"}</div>
       </div>
     {/if}
   </div>
@@ -271,7 +330,7 @@
         <StreamChart label="Power" unit="W" color="#fc5200" xs={t} ys={power} {syncKey} />
       {/if}
       {#if hasAny(hr)}
-        <StreamChart label="Herzfrequenz" unit="bpm" color="#fc5200" xs={t} ys={hr} {syncKey} />
+        <StreamChart label="Herzfrequenz" unit="bpm" color="#fc5200" xs={t} ys={hr} {syncKey} zones={hrZoneBands} />
       {/if}
       {#if hasAny(cadence)}
         <StreamChart label="Trittfrequenz" unit="rpm" color="#fc5200" xs={t} ys={cadence} {syncKey} />
@@ -279,6 +338,18 @@
       {#if hasAny(temperature)}
         <StreamChart label="Temperatur" unit="°C" color="#fc5200" xs={t} ys={temperature} {syncKey} valueDigits={1} />
       {/if}
+    </div>
+  {/if}
+
+  {#if hrZones}
+    <div class="zone-cards">
+      {#each hrZones as z, i}
+        <div class="zone-card" style="--zone-color: {z.color}">
+          <div class="card-title">{z.label}: {z.fromBpm} bpm - {z.toBpm} bpm</div>
+          <div class="card-value">{fmtZoneTime(z.seconds)}</div>
+          <div class="card-sub">{z.pct.toFixed(1)}%</div>
+        </div>
+      {/each}
     </div>
   {/if}
 {:else if !error}
@@ -329,6 +400,19 @@
   .card-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .card-value { font-size: 22px; font-weight: 600; margin-top: 4px; }
   .card-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .zone-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .zone-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--zone-color);
+  }
   .charts { display: flex; flex-direction: column; gap: 18px; margin-top: 24px; }
   .map-row {
     margin-top: 24px;

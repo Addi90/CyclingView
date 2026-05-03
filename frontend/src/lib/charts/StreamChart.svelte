@@ -13,6 +13,7 @@
   export let height = 180;
   export let syncKey = "ride";
   export let valueDigits = 0;
+  export let zones: { from: number; to: number; color: string }[] | null = null;
 
   let container: HTMLDivElement;
   let plot: uPlot | null = null;
@@ -57,17 +58,19 @@
     if (plot) { plot.destroy(); plot = null; }
     if (!xs?.length) return;
 
-    const yr = yRange();
-
     const opts: UPlotOptions = {
       width: Math.max(300, container.clientWidth || 800),
       height,
       cursor: { sync: { key: syncKey } },
       scales: {
         x: { time: false },
-        y: yr
-          ? { auto: false, range: () => yr }
-          : { auto: true },
+        y: {
+          auto: true,
+          range: (_u, min, max) => {
+            const r = yRange();
+            return r || [min, max];
+          },
+        },
       },
       axes: [
         {
@@ -111,8 +114,53 @@
             }
           },
         ],
+        draw: [
+          (u) => {
+            if (!zones || !zones.length) return;
+            const { ctx } = u;
+            const { left, top, width, height } = u.bbox;
+            
+            const sKey = u.series[1].scale || "y";
+            const s = u.scales[sKey];
+            if (!s || s.min == null || s.max == null) return;
+
+            const min = s.min;
+            const max = s.max;
+            const range = max - min;
+            if (range <= 0) return;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(left, top, width, height);
+            ctx.clip();
+
+            for (const z of zones) {
+              // Calculate pixel positions manually to be 100% sure of the alignment.
+              // uPlot Y axis is inverted: max is at top (0), min is at bottom (height).
+              // We work relative to the bbox top/height.
+              
+              const vTop = Math.min(max, Math.max(min, z.to));
+              const vBot = Math.min(max, Math.max(min, z.from));
+              
+              if (vTop <= vBot) continue;
+
+              // Percentage from bottom (0 = min, 1 = max)
+              const pctTop = (vTop - min) / range;
+              const pctBot = (vBot - min) / range;
+
+              // Canvas Y (top-down): top + height * (1 - pct)
+              const yTop = top + height * (1 - pctTop);
+              const yBot = top + height * (1 - pctBot);
+
+              ctx.fillStyle = z.color + "26";
+              ctx.fillRect(left, yTop, width, yBot - yTop);
+            }
+            ctx.restore();
+          },
+        ],
       },
     };
+
     plot = new uPlot(opts, toData(), container);
   }
 
@@ -122,12 +170,20 @@
     if (w > 0) plot.setSize({ width: w, height });
   }
 
-  $: if (plot && xs && ys) {
-    plot.setData(toData());
+  let _lastZones: typeof zones = null;
+
+  $: if (xs && ys && container) {
+    if (!plot || zones !== _lastZones) {
+      _lastZones = zones;
+      build();
+    } else {
+      plot.setData(toData());
+    }
   }
 
   onMount(async () => {
-    build();
+    // Initial build if data is already present
+    if (xs?.length && ys?.length) build();
     // After layout settles (sidebar grid columns resolved), force a correct size.
     await tick();
     requestAnimationFrame(resize);

@@ -24,6 +24,8 @@ export interface AppSettings {
   ageYears: number;
   /** Biological sex (used for HR-based calorie estimation). */
   sex: "male" | "female";
+  /** Maximum heart rate in bpm (used for HR zone calculation). Null = disabled. */
+  maxHR: number | null;
 }
 
 const DEFAULTS: AppSettings = {
@@ -38,6 +40,7 @@ const DEFAULTS: AppSettings = {
   powerUnit: "W",
   ageYears: 35,
   sex: "male",
+  maxHR: null,
 };
 
 const KEY = "cycling-view-settings-v1";
