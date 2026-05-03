@@ -178,7 +178,8 @@
       z.pct = totalSeconds > 0 ? (z.seconds / totalSeconds) * 100 : 0;
     }
 
-    return zones;
+    const hasData = zones.some((z) => z.seconds > 0);
+    return hasData ? zones : null;
   }
 
   function fmtZoneTime(seconds: number): string {
