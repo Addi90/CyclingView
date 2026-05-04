@@ -78,7 +78,9 @@
     return null;
   }
 
-  /** Build a FeatureCollection of 2-point LineStrings, each with `color`. */
+  /** Build a FeatureCollection of segments grouped by color into MultiLineStrings.
+   *  This is much more efficient than thousands of individual LineStrings and
+   *  prevents rendering artifacts/culling issues at low zoom levels. */
   function buildSegments(g: GeoResponse, m: Mode): GeoJSON.FeatureCollection {
     const coords = g.geometry.coordinates;
     const features: GeoJSON.Feature[] = [];
@@ -95,7 +97,6 @@
     }
 
     const raw = g.properties.streams[m]!;
-    // For speed, convert m/s -> km/h for display & legend
     const conv = (v: number | null) =>
       v == null ? null : m === "speed" ? v * 3.6 : v;
     const values = raw.map(conv);
@@ -108,16 +109,42 @@
       stops: [lo, lo + (hi - lo) * 0.25, lo + (hi - lo) * 0.5, lo + (hi - lo) * 0.75, hi],
     };
 
+    const STEPS = 64; // Quantization steps to group segments by color
+    const groups: Record<string, [number, number][][]> = {};
+
+    let currentLine: [number, number][] = [coords[0] as [number, number]];
+    let lastColor = "";
+
     for (let i = 0; i < coords.length - 1; i++) {
-      // Use the value at this index, falling back to the last valid one
       const v = values[i] ?? lastValid(values, i);
-      const t = v == null ? 0 : (v - lo) / (hi - lo);
+      const range = hi - lo || 1;
+      const t = v == null ? 0 : (v - lo) / range;
+      const qt = Math.round(t * STEPS) / STEPS;
+      const color = v == null ? "#888" : rampColor(qt);
+
+      if (i > 0 && color !== lastColor) {
+        if (!groups[lastColor]) groups[lastColor] = [];
+        groups[lastColor].push(currentLine);
+        currentLine = [coords[i] as [number, number]];
+      }
+      
+      currentLine.push(coords[i + 1] as [number, number]);
+      lastColor = color;
+    }
+
+    if (currentLine.length > 1) {
+      if (!groups[lastColor]) groups[lastColor] = [];
+      groups[lastColor].push(currentLine);
+    }
+
+    for (const [color, lines] of Object.entries(groups)) {
       features.push({
         type: "Feature",
-        geometry: { type: "LineString", coordinates: [coords[i], coords[i + 1]] },
-        properties: { color: v == null ? "#888" : rampColor(t) },
+        geometry: { type: "MultiLineString", coordinates: lines },
+        properties: { color },
       });
     }
+
     return { type: "FeatureCollection", features };
   }
 
@@ -129,6 +156,18 @@
       src.setData(fc);
     } else {
       map.addSource(SOURCE_ID, { type: "geojson", data: fc });
+      // Add a thin semi-transparent base line for better visibility on varied maps
+      map.addLayer({
+        id: LAYER_ID + "-bg",
+        type: "line",
+        source: SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#000",
+          "line-opacity": 0.15,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 4, 10, 5, 14, 10, 18, 14],
+        },
+      });
       map.addLayer({
         id: LAYER_ID,
         type: "line",
@@ -136,7 +175,7 @@
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": ["get", "color"],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2.5, 14, 5],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 4, 14, 8, 18, 12],
         },
       });
     }

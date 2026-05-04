@@ -204,8 +204,13 @@
 
 <div class="chart-card">
   <div class="title" style:color={color}>
-    <span>{label}</span>
-    {#if unit}<span class="unit">({unit})</span>{/if}
+    <div class="title-left">
+      <span>{label}</span>
+      {#if unit}<span class="unit">({unit})</span>{/if}
+    </div>
+    <div class="title-right">
+      <slot name="title-right" />
+    </div>
   </div>
   <div class="chart" bind:this={container}></div>
 </div>
@@ -221,9 +226,14 @@
     font-size: 13px;
     font-weight: 600;
     display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 6px;
+  }
+  .title-left {
+    display: flex;
     gap: 6px;
     align-items: baseline;
-    padding-bottom: 6px;
   }
   .unit { color: var(--muted); font-weight: 400; font-size: 11px; }
   .chart { width: 100%; min-height: 180px; }
