@@ -7,6 +7,7 @@
   import StreamChart from "../lib/charts/StreamChart.svelte";
   import RouteMap from "../lib/RouteMap.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
+  import { hoverTime } from "../lib/hover";
   import {
     settings,
     applyStreamFilter,
@@ -198,6 +199,35 @@
   function hasAny(arr: (number | null)[]): boolean {
     return arr.some((v) => v != null);
   }
+
+  /** Find the index in `ts` whose value is closest to `t`. */
+  function nearestIndex(ts: number[], t: number): number {
+    if (ts.length === 0) return -1;
+    let lo = 0, hi = ts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (ts[mid] < t) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0 && Math.abs(ts[lo - 1] - t) < Math.abs(ts[lo] - t)) lo -= 1;
+    return lo;
+  }
+
+  $: hoverHR = (() => {
+    if ($hoverTime == null || !t.length || !hr.length) return null;
+    const i = nearestIndex(t, $hoverTime);
+    return i >= 0 ? hr[i] : null;
+  })();
+
+  function getZoneIdx(bpm: number | null): number | null {
+    if (bpm == null || !hrZones) return null;
+    for (let i = 0; i < hrZones.length; i++) {
+      if (bpm >= hrZones[i].fromBpm && bpm <= hrZones[i].toBpm) return i;
+    }
+    return null;
+  }
+
+  $: hoverZoneIdx = getZoneIdx(hoverHR);
 </script>
 
 <a href="/" on:click|preventDefault={() => history.back()}>← Zurück</a>
@@ -331,7 +361,24 @@
         <StreamChart label="Power" unit="W" color="#fc5200" xs={t} ys={power} {syncKey} />
       {/if}
       {#if hasAny(hr)}
-        <StreamChart label="Herzfrequenz" unit="bpm" color="#fc5200" xs={t} ys={hr} {syncKey} zones={hrZoneBands} />
+        <StreamChart label="Herzfrequenz" unit="bpm" color="#fc5200" xs={t} ys={hr} {syncKey} zones={hrZoneBands}>
+          <div slot="title-right" class="hr-legend">
+            {#if hrZones}
+              {#each hrZones as z, i}
+                <div 
+                  class="zone-pill" 
+                  class:active={hoverZoneIdx === i}
+                  style:--color={z.color}
+                  title={`${z.label}: ${z.fromBpm}-${z.toBpm} bpm`}
+                >
+                  {#if hoverZoneIdx === i}
+                    <span class="zone-label">{z.label}</span>
+                  {/if}
+                </div>
+              {/each}
+            {/if}
+          </div>
+        </StreamChart>
       {/if}
       {#if hasAny(cadence)}
         <StreamChart label="Trittfrequenz" unit="rpm" color="#fc5200" xs={t} ys={cadence} {syncKey} />
@@ -415,6 +462,34 @@
     border-left: 3px solid var(--zone-color);
   }
   .charts { display: flex; flex-direction: column; gap: 18px; margin-top: 24px; }
+
+  .hr-legend {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .zone-pill {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    background: var(--color);
+    opacity: 0.4;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .zone-pill.active {
+    width: 32px;
+    opacity: 1;
+    box-shadow: 0 0 8px var(--color);
+  }
+  .zone-label {
+    font-size: 10px;
+    color: #000;
+    font-weight: 800;
+  }
   .map-row {
     margin-top: 24px;
     display: grid;
