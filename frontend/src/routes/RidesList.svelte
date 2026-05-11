@@ -129,11 +129,11 @@
             <th class="sortable col-date" class:active={sortKey === "start_time"} on:click={() => setSort("start_time")}>
               Datum {sortKey === "start_time" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
-            <th class="sortable col-name" class:active={sortKey === "name"} on:click={() => setSort("name")}>
-              Name {sortKey === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-            </th>
             <th class="sortable col-bike" class:active={sortKey === "bike_name"} on:click={() => setSort("bike_name")}>
               Rad {sortKey === "bike_name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+            </th>
+            <th class="sortable col-name" class:active={sortKey === "name"} on:click={() => setSort("name")}>
+              Name {sortKey === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-dist" class:active={sortKey === "distance_m"} on:click={() => setSort("distance_m")}>
               Distanz {sortKey === "distance_m" ? (sortDir === "asc" ? "↑" : "↓") : ""}
@@ -163,8 +163,8 @@
             <tr>
               <td class="col-date"><Link to={`/rides/${r.id}`}>{fmtDateShort(r.start_time)}</Link></td>
               <td class="col-name"><Link to={`/rides/${r.id}`}>{r.name ?? "–"}</Link></td>
-              <td class="col-bike">{r.bike_name ?? "–"}</td>
               <td class="num col-dist">{fmtKm(r.distance_m)}</td>
+              <td class="col-bike">{r.bike_name ?? "–"}</td>
               <td class="num col-dur">{fmtDuration(r.moving_s ?? r.elapsed_s)}</td>
               <td class="num col-speed">{fmtKmh(r.avg_speed_ms)}</td>
               <td class="num col-power">{fmtNum(r.avg_power, 0, " W")}</td>
@@ -201,7 +201,7 @@
     overflow-y: auto;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 800px) {
     .layout {
       grid-template-columns: 1fr;
       gap: 16px;
@@ -210,7 +210,7 @@
       order: 1;
       position: static;
       max-height: none;
-      width: auto;
+      width: 100%;
       margin-bottom: 8px;
     }
     section {
@@ -219,22 +219,24 @@
       overflow: hidden;
     }
     table.rides {
-      min-width: auto;
+      min-width: 400px;
     }
     table.rides th, table.rides td {
       padding: 10px 8px;
     }
     table.rides .col-date { width: 85px; }
-    table.rides .col-dist { width: 70px; }
+    table.rides .col-dist { width: 55px; }
     .col-name {
-      max-width: 140px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      max-width: 90px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
     }
     /* Hide less critical columns on small screens to fit Date, Name, Distance */
     .col-bike, .col-speed, .col-np, .col-hr, .col-elev {
       display: none;
+    }
+    table.rides .col-name {
+      white-space: normal ;
     }
   }
 
