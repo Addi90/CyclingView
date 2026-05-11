@@ -3,6 +3,7 @@
   import { Link } from "svelte-routing";
   import { api, type OverallStats } from "./api";
   import { fmtKm, fmtDuration, fmtNum, fmtDateShort } from "./format";
+  import { t } from "./i18n";
 
   let stats: OverallStats | null = null;
   let error = "";
@@ -19,19 +20,19 @@
 {#if error}
   <p class="error">Stats: {error}</p>
 {:else if !stats}
-  <p class="muted small">Lade Stats…</p>
+  <p class="muted small">{$t("stats.loading")}</p>
 {:else}
-  <h3>Allzeit</h3>
+  <h3>{$t("stats.alltime")}</h3>
   <dl class="stat-list">
-    <dt>Fahrten</dt><dd>{stats.totals.rides}</dd>
-    <dt>Distanz</dt><dd>{fmtKm(stats.totals.distance_m, 0)}</dd>
-    <dt>Fahrzeit</dt><dd>{fmtDuration(stats.totals.moving_s)}</dd>
-    <dt>Höhenmeter</dt><dd>{fmtNum(stats.totals.elevation_gain_m, 0, " m")}</dd>
+    <dt>{$t("stats.rides")}</dt><dd>{stats.totals.rides}</dd>
+    <dt>{$t("stats.distance")}</dt><dd>{fmtKm(stats.totals.distance_m, 0)}</dd>
+    <dt>{$t("stats.duration")}</dt><dd>{fmtDuration(stats.totals.moving_s)}</dd>
+    <dt>{$t("stats.elevation")}</dt><dd>{fmtNum(stats.totals.elevation_gain_m, 0, " m")}</dd>
   </dl>
 
   {#if stats.longest_distance}
     <p class="muted small">
-      🏁 Längste Strecke:
+      {$t("stats.longest.distance")}
       <Link to={`/rides/${stats.longest_distance.id}`}>
         {fmtKm(stats.longest_distance.distance_m, 1)}
       </Link>
@@ -41,7 +42,7 @@
   {/if}
   {#if stats.longest_duration && stats.longest_duration.id !== stats.longest_distance?.id}
     <p class="muted small">
-      ⏱ Längste Dauer:
+      {$t("stats.longest.duration")}
       <Link to={`/rides/${stats.longest_duration.id}`}>
         {fmtDuration(stats.longest_duration.moving_s)}
       </Link>
@@ -52,9 +53,9 @@
 
   {#if stats.per_year.length}
     <details open>
-      <summary>Pro Jahr</summary>
+      <summary>{$t("stats.per_year")}</summary>
       <table class="ystats">
-        <thead><tr><th>Jahr</th><th>Fahrten</th><th>km</th><th>Zeit</th></tr></thead>
+        <thead><tr><th>{$t("stats.year")}</th><th>{$t("stats.rides")}</th><th>km</th><th>{$t("rides.col.duration")}</th></tr></thead>
         <tbody>
           {#each stats.per_year as y}
             <tr>
@@ -71,9 +72,9 @@
 
   {#if stats.per_bike.length}
     <details>
-      <summary>Pro Rad</summary>
+      <summary>{$t("stats.per_bike")}</summary>
       <table class="ystats">
-        <thead><tr><th>Rad</th><th>Fahrten</th><th>km</th></tr></thead>
+        <thead><tr><th>{$t("stats.bike")}</th><th>{$t("stats.rides")}</th><th>km</th></tr></thead>
         <tbody>
           {#each stats.per_bike as b}
             <tr>
@@ -84,7 +85,7 @@
           {/each}
           {#if stats.unassigned.rides > 0}
             <tr class="dim">
-              <td>– ohne –</td>
+              <td>{$t("stats.unassigned")}</td>
               <td>{stats.unassigned.rides}</td>
               <td>{(stats.unassigned.distance_m / 1000).toFixed(0)}</td>
             </tr>

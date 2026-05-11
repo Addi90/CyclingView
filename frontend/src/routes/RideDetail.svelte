@@ -4,6 +4,7 @@
   import { Pencil, Trash2, Bike as BikeIcon } from "lucide-svelte";
   import { api, type Ride, type StreamsResponse, type StreamField, type Bike } from "../lib/api";
   import { fmtKm, fmtKmh, fmtDuration, fmtNum, fmtDate } from "../lib/format";
+  import { t } from "../lib/i18n";
   import StreamChart from "../lib/charts/StreamChart.svelte";
   import RouteMap from "../lib/RouteMap.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
@@ -66,7 +67,7 @@
 
   async function deleteRide() {
     if (!ride) return;
-    if (!confirm(`Fahrt „${ride.name ?? ride.id}“ wirklich löschen? Dies kann nicht rückgängig gemacht werden.`)) return;
+    if (!confirm($t("ride.delete_confirm").replace("{name}", String(ride.name ?? ride.id)))) return;
     try {
       await api.deleteRide(ride.id);
       navigate("/", { replace: true });
@@ -91,7 +92,7 @@
   onMount(load);
 
   // Raw series
-  $: t = streams?.t ?? [];
+  $: ts = streams?.t ?? [];
   $: powerRaw = (streams?.power ?? []) as (number | null)[];
   $: hrRaw = (streams?.heart_rate ?? []) as (number | null)[];
   $: speedRawMs = (streams?.speed ?? []) as (number | null)[];
@@ -101,26 +102,26 @@
 
   // Pause mask derived from raw speed (seconds).
   $: pauseMask = $settings.hidePauses && speedRawMs.length
-    ? buildPauseMask(speedRawMs, t, $settings.pauseThresholdS, $settings.pauseSpeedMs)
+    ? buildPauseMask(speedRawMs, ts, $settings.pauseThresholdS, $settings.pauseSpeedMs)
     : undefined;
 
   // Filtered series for charts + recomputed stats.
-  $: power = applyStreamFilter(powerRaw, t, {
+  $: power = applyStreamFilter(powerRaw, ts, {
     excludeZero: $settings.excludeZeroPower,
     pauseMask,
   });
-  $: hr = applyStreamFilter(hrRaw, t, { pauseMask });
-  $: speedMs = applyStreamFilter(speedRawMs, t, { pauseMask });
+  $: hr = applyStreamFilter(hrRaw, ts, { pauseMask });
+  $: speedMs = applyStreamFilter(speedRawMs, ts, { pauseMask });
   $: speedKmh = speedMs.map((v) => (v == null ? null : v * 3.6));
-  $: altitude = applyStreamFilter(altitudeRaw, t, { pauseMask });
-  $: cadence = applyStreamFilter(cadenceRaw, t, {
+  $: altitude = applyStreamFilter(altitudeRaw, ts, { pauseMask });
+  $: cadence = applyStreamFilter(cadenceRaw, ts, {
     excludeZero: $settings.excludeZeroCadence,
     pauseMask,
   });
-  $: temperature = applyStreamFilter(temperatureRaw, t, { pauseMask });
+  $: temperature = applyStreamFilter(temperatureRaw, ts, { pauseMask });
 
   // Live stats from filtered streams.
-  $: powerStats = { avg: mean(power), max: maxOf(power), np: normalizedPower(power, t) };
+  $: powerStats = { avg: mean(power), max: maxOf(power), np: normalizedPower(power, ts) };
   $: hrStats = { avg: mean(hr), max: maxOf(hr), min: minOf(hr) };
   $: speedStats = { avg: mean(speedMs), max: maxOf(speedMs) };
   $: cadStats = { avg: mean(cadence), max: maxOf(cadence) };
@@ -129,9 +130,9 @@
 
   // Calorie estimate. Prefer power-based (most accurate); fallback to HR (Keytel 2005);
   // final fallback to MET-based estimate from distance and duration.
-  $: kcalPower = ride?.has_power ? kcalFromPower(powerRaw, t) : null;
+  $: kcalPower = ride?.has_power ? kcalFromPower(powerRaw, ts) : null;
   $: kcalHR = (kcalPower == null && ride?.has_hr)
-    ? kcalFromHR(hrRaw, t, $settings.weightKg, $settings.ageYears, $settings.sex)
+    ? kcalFromHR(hrRaw, ts, $settings.weightKg, $settings.ageYears, $settings.sex)
     : null;
   $: kcalMET = (kcalPower == null && kcalHR == null && ride?.distance_m != null)
     ? kcalFromMET(ride.distance_m, ride.moving_s ?? ride.elapsed_s ?? 0, $settings.weightKg)
@@ -140,12 +141,12 @@
   $: kcalSource = kcalPower != null ? "Power" : (kcalHR != null ? "HR·Keytel" : (kcalMET != null ? "MET" : null));
 
   // HR zone time computation (5 zones based on user's max HR setting)
-  $: hrZones = computeHRZones(hr, t, ride?.moving_s ?? 0);
+  $: hrZones = computeHRZones(hr, ts, ride?.moving_s ?? 0);
 
   // HR zone bands for chart background
   $: hrZoneBands = hrZones?.map((z) => ({ from: z.fromBpm, to: z.toBpm, color: z.color })) ?? null;
 
-  function computeHRZones(hr: (number | null)[], t: number[], totalSeconds: number): { label: string; seconds: number; pct: number; color: string }[] | null {
+  function computeHRZones(hr: (number | null)[], timestamps: number[], totalSeconds: number): { label: string; seconds: number; pct: number; color: string; fromBpm: number; toBpm: number }[] | null {
     const maxHR = $settings.maxHR;
     if (maxHR == null || maxHR < 60) return null;
 
@@ -170,8 +171,8 @@
       else if (pct < 0.95) zoneIdx = 3;
       else zoneIdx = 4;
 
-      const prev = i > 0 ? t[i] - t[i - 1] : 0;
-      const next = i < hr.length - 1 ? t[i + 1] - t[i] : 0;
+      const prev = i > 0 ? timestamps[i] - timestamps[i - 1] : 0;
+      const next = i < hr.length - 1 ? timestamps[i + 1] - timestamps[i] : 0;
       let dt = (prev + next) / 2;
       if (i === 0) dt = next;
       if (i === hr.length - 1) dt = prev;
@@ -206,21 +207,21 @@
   }
 
   /** Find the index in `ts` whose value is closest to `t`. */
-  function nearestIndex(ts: number[], t: number): number {
-    if (ts.length === 0) return -1;
-    let lo = 0, hi = ts.length - 1;
+  function nearestIndex(tsArr: number[], targetT: number): number {
+    if (tsArr.length === 0) return -1;
+    let lo = 0, hi = tsArr.length - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (ts[mid] < t) lo = mid + 1;
+      if (tsArr[mid] < targetT) lo = mid + 1;
       else hi = mid;
     }
-    if (lo > 0 && Math.abs(ts[lo - 1] - t) < Math.abs(ts[lo] - t)) lo -= 1;
+    if (lo > 0 && Math.abs(tsArr[lo - 1] - targetT) < Math.abs(tsArr[lo] - targetT)) lo -= 1;
     return lo;
   }
 
   $: hoverHR = (() => {
-    if ($hoverTime == null || !t.length || !hr.length) return null;
-    const i = nearestIndex(t, $hoverTime);
+    if ($hoverTime == null || !ts.length || !hr.length) return null;
+    const i = nearestIndex(ts, $hoverTime);
     return i >= 0 ? hr[i] : null;
   })();
 
@@ -235,7 +236,7 @@
   $: hoverZoneIdx = getZoneIdx(hoverHR);
 </script>
 
-<a href="/" on:click|preventDefault={() => history.back()}>← Zurück</a>
+<a href="/" on:click|preventDefault={() => history.back()}>{$t("ride.back")}</a>
 
 {#if error}<div class="error">{error}</div>{/if}
 
@@ -244,36 +245,36 @@
     {#if editing}
       <div class="edit-form">
         <label class="row">
-          <span>Name</span>
-          <input type="text" bind:value={editName} placeholder="Fahrtname" />
+          <span>{$t("ride.name")}</span>
+          <input type="text" bind:value={editName} placeholder={$t("ride.name")} />
         </label>
         <label class="row">
-          <span>Typ</span>
+          <span>{$t("ride.type")}</span>
           <select bind:value={editType}>
             {#each ACTIVITY_TYPES as t}<option value={t}>{t}</option>{/each}
           </select>
         </label>
         <label class="row">
-          <span>Rad</span>
+          <span>{$t("ride.bike")}</span>
           <select bind:value={editBikeId}>
-            <option value="">– keines –</option>
+            <option value="">{$t("ride.bike.none")}</option>
             {#each bikes as b}<option value={b.id}>{b.name}</option>{/each}
           </select>
         </label>
         {#if saveErr}<div class="error inline">{saveErr}</div>{/if}
         <div class="edit-actions">
-          <button type="button" on:click={() => (editing = false)} disabled={saveBusy}>Abbrechen</button>
+          <button type="button" on:click={() => (editing = false)} disabled={saveBusy}>{$t("ride.cancel")}</button>
           <button type="button" class="primary" on:click={saveEdit} disabled={saveBusy}>
-            {saveBusy ? "Speichere…" : "Speichern"}
+            {saveBusy ? $t("ride.saving") : $t("ride.save")}
           </button>
         </div>
       </div>
     {:else}
       <div class="title-row">
-        <h2>{ride.name ?? "Fahrt"}</h2>
+        <h2>{ride.name ?? $t("ride.title_fallback")}</h2>
         <div class="head-actions">
-          <button type="button" on:click={beginEdit} title="Bearbeiten"><Pencil size={14} /> Bearbeiten</button>
-          <button type="button" class="danger" on:click={deleteRide} title="Löschen"><Trash2 size={14} /> Löschen</button>
+          <button type="button" on:click={beginEdit} title={$t("ride.edit")}><Pencil size={14} /> {$t("ride.edit")}</button>
+          <button type="button" class="danger" on:click={deleteRide} title={$t("ride.delete")}><Trash2 size={14} /> {$t("ride.delete")}</button>
         </div>
       </div>
       <div class="meta">
@@ -286,32 +287,32 @@
 
   <div class="cards">
     <div class="card">
-      <div class="card-title">Distanz</div>
+      <div class="card-title">{$t("ride.card.distance")}</div>
       <div class="card-value">{fmtKm(ride.distance_m)}</div>
-      <div class="card-sub">Höhenmeter: {fmtNum(ride.elevation_gain_m, 0, " m")}</div>
+      <div class="card-sub">{$t("ride.card.elevation")}: {fmtNum(ride.elevation_gain_m, 0, " m")}</div>
     </div>
     <div class="card">
-      <div class="card-title">Dauer</div>
+      <div class="card-title">{$t("ride.card.duration")}</div>
       <div class="card-value">{fmtDuration(ride.moving_s)}</div>
-      <div class="card-sub">Gesamt: {fmtDuration(ride.elapsed_s)}</div>
+      <div class="card-sub">{$t("ride.card.elapsed")}: {fmtDuration(ride.elapsed_s)}</div>
     </div>
     <div class="card">
-      <div class="card-title">Speed</div>
+      <div class="card-title">{$t("ride.card.speed")}</div>
       <div class="card-value">⌀ {fmtKmh(speedStats.avg ?? ride.avg_speed_ms)}</div>
       <div class="card-sub">max {fmtKmh(speedStats.max ?? ride.max_speed_ms)}</div>
     </div>
     {#if ride.has_power}
       <div class="card power">
-        <div class="card-title">Power</div>
+        <div class="card-title">{$t("ride.card.power")}</div>
         <div class="card-value">⌀ {fmtNum(powerStats.avg ?? ride.avg_power, 0, " W")}</div>
         <div class="card-sub">
-          NP {fmtNum(powerStats.np ?? ride.np_power, 0, " W")} · max {fmtNum(powerStats.max ?? ride.max_power, 0, " W")}
+          {$t("rides.col.np")} {fmtNum(powerStats.np ?? ride.np_power, 0, " W")} · max {fmtNum(powerStats.max ?? ride.max_power, 0, " W")}
         </div>
       </div>
     {/if}
     {#if ride.has_hr}
       <div class="card hr">
-        <div class="card-title">Herzfrequenz</div>
+        <div class="card-title">{$t("ride.card.hr")}</div>
         <div class="card-value">⌀ {fmtNum(hrStats.avg ?? ride.avg_hr, 0, " bpm")}</div>
         <div class="card-sub">
           min {fmtNum(hrStats.min, 0, " bpm")} · max {fmtNum(hrStats.max ?? ride.max_hr, 0, " bpm")}
@@ -320,14 +321,14 @@
     {/if}
     {#if ride.has_cadence}
       <div class="card cad">
-        <div class="card-title">Trittfrequenz</div>
+        <div class="card-title">{$t("ride.card.cadence")}</div>
         <div class="card-value">⌀ {fmtNum(cadStats.avg ?? ride.avg_cadence, 0, " rpm")}</div>
         <div class="card-sub">max {fmtNum(cadStats.max ?? ride.max_cadence, 0, " rpm")}</div>
       </div>
     {/if}
     {#if hasTemp}
       <div class="card temp">
-        <div class="card-title">Temperatur</div>
+        <div class="card-title">{$t("ride.card.temperature")}</div>
         <div class="card-value">⌀ {fmtNum(tempStats.avg, 1, " °C")}</div>
         <div class="card-sub">
           min {fmtNum(tempStats.min, 1, " °C")} · max {fmtNum(tempStats.max, 1, " °C")}
@@ -336,14 +337,14 @@
     {/if}
     {#if kcal != null}
       <div class="card kcal">
-        <div class="card-title">Kalorien</div>
+        <div class="card-title">{$t("ride.card.calories")}</div>
         <div class="card-value">{fmtNum(kcal, 0, " kcal")}</div>
         <div class="card-sub">
           {kcalSource === "Power"
-            ? "aus Power (η = 0,24)"
+            ? $t("ride.kcal.power")
             : kcalSource === "HR·Keytel"
-              ? "aus HR (Keytel 2005)"
-              : "aus MET (Compendium)"}
+              ? $t("ride.kcal.hr")
+              : $t("ride.kcal.met")}
         </div>
       </div>
     {/if}
@@ -355,7 +356,7 @@
     </div>
     {#if ride.has_power}
       <aside class="bests-side">
-        <PowerBestsTable activityId={ride.id} title="Power-Bestwerte" />
+        <PowerBestsTable activityId={ride.id} />
       </aside>
     {/if}
   </section>
@@ -363,16 +364,16 @@
   {#if streams}
     <div class="charts">
       {#if hasAny(altitude)}
-        <StreamChart label="Höhe" unit="m" color="#fc5200" xs={t} ys={altitude} {syncKey} />
+        <StreamChart label={$t("ride.chart.elevation")} unit="m" color="#fc5200" xs={ts} ys={altitude} {syncKey} />
       {/if}
       {#if hasAny(speedKmh)}
-        <StreamChart label="Geschwindigkeit" unit="km/h" color="#fc5200" xs={t} ys={speedKmh} {syncKey} valueDigits={1} />
+        <StreamChart label={$t("ride.chart.speed")} unit="km/h" color="#fc5200" xs={ts} ys={speedKmh} {syncKey} valueDigits={1} />
       {/if}
       {#if hasAny(power)}
-        <StreamChart label="Power" unit="W" color="#fc5200" xs={t} ys={power} {syncKey} />
+        <StreamChart label={$t("ride.card.power")} unit="W" color="#fc5200" xs={ts} ys={power} {syncKey} />
       {/if}
       {#if hasAny(hr)}
-        <StreamChart label="Herzfrequenz" unit="bpm" color="#fc5200" xs={t} ys={hr} {syncKey} zones={hrZoneBands}>
+        <StreamChart label={$t("ride.card.hr")} unit="bpm" color="#fc5200" xs={ts} ys={hr} {syncKey} zones={hrZoneBands}>
           <div slot="title-right" class="hr-legend">
             {#if hrZones}
               {#each hrZones as z, i}
@@ -392,10 +393,10 @@
         </StreamChart>
       {/if}
       {#if hasAny(cadence)}
-        <StreamChart label="Trittfrequenz" unit="rpm" color="#fc5200" xs={t} ys={cadence} {syncKey} />
+        <StreamChart label={$t("ride.card.cadence")} unit="rpm" color="#fc5200" xs={ts} ys={cadence} {syncKey} />
       {/if}
       {#if hasAny(temperature)}
-        <StreamChart label="Temperatur" unit="°C" color="#fc5200" xs={t} ys={temperature} {syncKey} valueDigits={1} />
+        <StreamChart label={$t("ride.card.temperature")} unit="°C" color="#fc5200" xs={ts} ys={temperature} {syncKey} valueDigits={1} />
       {/if}
     </div>
   {/if}
@@ -412,7 +413,7 @@
     </div>
   {/if}
 {:else if !error}
-  <p class="muted">Lade…</p>
+  <p class="muted">{$t("common.loading")}</p>
 {/if}
 
 <style>

@@ -5,12 +5,14 @@
   import { settings } from "./settings";
   import { fmtWindow, fmtPower } from "./power-format";
   import { fmtDateShort } from "./format";
+  import { t } from "./i18n";
 
   /** When set, show this ride's bests; otherwise the all-time leaderboard. */
   export let activityId: number | string | null = null;
-  export let title = activityId ? "Power-Bestwerte (Mean-Max)" : "Power-Bestwerte (All-Time)";
   /** Compact mode hides the "Fahrt" column and truncates dates. */
   export let compact = false;
+
+  $: title = activityId ? $t("power.bests.mean_max") : $t("power.bests.all_time");
 
   let bests: PowerBest[] = [];
   let leaderboard: Record<string, AllTimeBestEntry[]> = {};
@@ -50,7 +52,7 @@
   <header>
     <h3>{title}</h3>
     <button type="button" class="unit" on:click={togglePowerUnit}
-      title={`Aktuell: ${$settings.powerUnit} (Gewicht ${$settings.weightKg} kg)`}>
+      title={$t("power.bests.unit_title").replace("{unit}", $settings.powerUnit).replace("{weight}", String($settings.weightKg))}>
       {$settings.powerUnit}
     </button>
   </header>
@@ -58,16 +60,16 @@
   {#if error}
     <p class="error">{error}</p>
   {:else if loading}
-    <p class="muted small">Lade…</p>
+    <p class="muted small">{$t("common.loading")}</p>
   {:else if windowsS.length === 0 || (activityId == null && Object.keys(leaderboard).length === 0)}
-    <p class="muted small">Keine Power-Daten.</p>
+    <p class="muted small">{$t("power.bests.no_data")}</p>
   {:else}
     <table>
       <thead>
         <tr>
-          <th>Dauer</th>
+          <th>{$t("power.bests.col.duration")}</th>
           <th class="powerUnit">{$settings.powerUnit}</th>
-          {#if activityId == null && !compact}<th>Fahrt</th>{/if}
+          {#if activityId == null && !compact}<th>{$t("power.bests.col.ride")}</th>{/if}
         </tr>
       </thead>
       <tbody>
@@ -87,7 +89,7 @@
               {#if !compact}
                 <td class="ride">
                   {#if top}
-                    <Link to={`/rides/${top.activity_id}`}>{top.name ?? "Fahrt"}</Link>
+                    <Link to={`/rides/${top.activity_id}`}>{top.name ?? $t("power.bests.col.ride")}</Link>
                     <small class="dim">{fmtDateShort(top.start_time)}</small>
                   {:else}–{/if}
                 </td>

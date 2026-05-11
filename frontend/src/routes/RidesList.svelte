@@ -4,6 +4,7 @@
   import { Plus } from "lucide-svelte";
   import { api, type Bike, type Ride } from "../lib/api";
   import { fmtKm, fmtKmh, fmtDuration, fmtNum, fmtDateShort } from "../lib/format";
+  import { t } from "../lib/i18n";
   import UploadDialog from "../lib/UploadDialog.svelte";
   import StatsPanel from "../lib/StatsPanel.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
@@ -87,33 +88,33 @@
 
 <div class="layout">
   <aside>
-    <h3>Filter</h3>
+    <h3>{$t("rides.filter")}</h3>
     <label>
-      Rad
+      {$t("rides.filter.bike")}
       <select bind:value={bikeFilter} on:change={load}>
-        <option value="">Alle</option>
+        <option value="">{$t("rides.filter.all")}</option>
         {#each bikes as b}
           <option value={b.id}>{b.name}</option>
         {/each}
       </select>
     </label>
     <label>
-      Von
+      {$t("rides.filter.from")}
       <input type="date" bind:value={dateFrom} on:change={load} />
     </label>
     <label>
-      Bis
+      {$t("rides.filter.to")}
       <input type="date" bind:value={dateTo} on:change={load} />
     </label>
-    <p class="muted">{total} Fahrten</p>
+    <p class="muted">{$t("rides.filter.count").replace("{count}", String(total))}</p>
     <button type="button" class="upload_action" on:click={() => (uploadOpen = true)}>
-      <Plus size={16} /> Fahrt hochladen
+      <Plus size={16} /> {$t("rides.upload")}
     </button>
     <hr />
     <StatsPanel />
 
     <hr />
-    <PowerBestsTable activityId={null} title="Power-Bestwerte" compact={true} />
+    <PowerBestsTable activityId={null} compact={true} />
 
     <hr />
 
@@ -121,40 +122,40 @@
 
   <section>
     {#if error}<div class="error">{error}</div>{/if}
-    {#if loading}<p class="muted">Lade…</p>{/if}
+    {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
     <div class="table-container">
       <table class="rides">
         <thead>
           <tr>
             <th class="sortable col-date" class:active={sortKey === "start_time"} on:click={() => setSort("start_time")}>
-              Datum {sortKey === "start_time" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.date")} {sortKey === "start_time" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable col-bike" class:active={sortKey === "bike_name"} on:click={() => setSort("bike_name")}>
-              Rad {sortKey === "bike_name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.bike")} {sortKey === "bike_name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable col-name" class:active={sortKey === "name"} on:click={() => setSort("name")}>
-              Name {sortKey === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.name")} {sortKey === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-dist" class:active={sortKey === "distance_m"} on:click={() => setSort("distance_m")}>
-              Distanz {sortKey === "distance_m" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.distance")} {sortKey === "distance_m" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-dur" class:active={sortKey === "moving_s"} on:click={() => setSort("moving_s")}>
-              Dauer {sortKey === "moving_s" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.duration")} {sortKey === "moving_s" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-speed" class:active={sortKey === "avg_speed_ms"} on:click={() => setSort("avg_speed_ms")}>
-              ⌀ Speed {sortKey === "avg_speed_ms" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.speed")} {sortKey === "avg_speed_ms" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-power" class:active={sortKey === "avg_power"} on:click={() => setSort("avg_power")}>
-              ⌀ Power {sortKey === "avg_power" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.power")} {sortKey === "avg_power" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-np" class:active={sortKey === "np_power"} on:click={() => setSort("np_power")}>
-              NP {sortKey === "np_power" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.np")} {sortKey === "np_power" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-hr" class:active={sortKey === "avg_hr"} on:click={() => setSort("avg_hr")}>
-              ⌀ HR {sortKey === "avg_hr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.hr")} {sortKey === "avg_hr" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
             <th class="sortable num col-elev" class:active={sortKey === "elevation_gain_m"} on:click={() => setSort("elevation_gain_m")}>
-              ↑ Höhe {sortKey === "elevation_gain_m" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              {$t("rides.col.elevation")} {sortKey === "elevation_gain_m" ? (sortDir === "asc" ? "↑" : "↓") : ""}
             </th>
           </tr>
         </thead>
