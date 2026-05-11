@@ -259,3 +259,38 @@ export function kcalFromHR(
   }
   return any ? kcal : null;
 }
+
+/**
+ * Estimate energy expenditure (kcal) from distance, duration and weight using MET values.
+ * Uses the Compendium of Physical Activities MET values for cycling at various speeds.
+ * kcal = MET × weight_kg × duration_hours
+ */
+export function kcalFromMET(
+  distanceM: number,
+  movingSeconds: number,
+  weightKg: number,
+): number | null {
+  if (!distanceM || !movingSeconds || !weightKg) return null;
+  const distanceKm = distanceM / 1000;
+  const durationH = movingSeconds / 3600;
+  // Average speed in km/h
+  const avgSpeedKmh = distanceKm / durationH;
+  // MET values from ACSM Compendium for cycling
+  const speedMetRanges = [
+    { min: 0, max: 8, met: 3.5 },       // < 8 km/h (very light)
+    { min: 8, max: 11.9, met: 4.0 },     // 8-12 km/h (light)
+    { min: 12, max: 14, met: 6.0 },      // 12-14 km/h (moderate)
+    { min: 14, max: 16, met: 8.0 },      // 14-16 km/h
+    { min: 16, max: 19.9, met: 8.5 },    // 16-20 km/h
+    { min: 20, max: 22, met: 10.0 },     // 20-22 km/h
+    { min: 22, max: 25.9, met: 10.0 },   // 22-26 km/h
+    { min: 26, max: 29.9, met: 11.8 },   // 26-30 km/h
+    { min: 30, max: 33.9, met: 12.8 },   // 30-34 km/h
+    { min: 34, max: 37.9, met: 14.0 },   // 34-38 km/h
+    { min: 38, max: 42.9, met: 16.0 },   // 38-43 km/h
+    { min: 43, max: 47.9, met: 17.0 },   // 43-48 km/h
+    { min: 48, max: Infinity, met: 19.0 }, // >= 48 km/h
+  ];
+  const met = speedMetRanges.find((r) => avgSpeedKmh >= r.min && avgSpeedKmh < r.max)?.met ?? 3.5;
+  return met * weightKg * durationH;
+}

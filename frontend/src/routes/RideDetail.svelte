@@ -18,6 +18,7 @@
     normalizedPower,
     kcalFromPower,
     kcalFromHR,
+    kcalFromMET,
   } from "../lib/settings";
 
   export let id: string;
@@ -126,13 +127,17 @@
   $: tempStats = { avg: mean(temperature), max: maxOf(temperature), min: minOf(temperature) };
   $: hasTemp = tempStats.avg != null;
 
-  // Calorie estimate. Prefer power-based (more accurate); fallback to HR (Keytel 2005).
+  // Calorie estimate. Prefer power-based (most accurate); fallback to HR (Keytel 2005);
+  // final fallback to MET-based estimate from distance and duration.
   $: kcalPower = ride?.has_power ? kcalFromPower(powerRaw, t) : null;
   $: kcalHR = (kcalPower == null && ride?.has_hr)
     ? kcalFromHR(hrRaw, t, $settings.weightKg, $settings.ageYears, $settings.sex)
     : null;
-  $: kcal = kcalPower ?? kcalHR;
-  $: kcalSource = kcalPower != null ? "Power" : (kcalHR != null ? "HR·Keytel" : null);
+  $: kcalMET = (kcalPower == null && kcalHR == null && ride?.distance_m != null)
+    ? kcalFromMET(ride.distance_m, ride.moving_s ?? ride.elapsed_s ?? 0, $settings.weightKg)
+    : null;
+  $: kcal = kcalPower ?? kcalHR ?? kcalMET;
+  $: kcalSource = kcalPower != null ? "Power" : (kcalHR != null ? "HR·Keytel" : (kcalMET != null ? "MET" : null));
 
   // HR zone time computation (5 zones based on user's max HR setting)
   $: hrZones = computeHRZones(hr, t, ride?.moving_s ?? 0);
@@ -333,7 +338,13 @@
       <div class="card kcal">
         <div class="card-title">Kalorien</div>
         <div class="card-value">{fmtNum(kcal, 0, " kcal")}</div>
-        <div class="card-sub">{kcalSource === "Power" ? "aus Power (η = 0,24)" : "aus HR (Keytel 2005)"}</div>
+        <div class="card-sub">
+          {kcalSource === "Power"
+            ? "aus Power (η = 0,24)"
+            : kcalSource === "HR·Keytel"
+              ? "aus HR (Keytel 2005)"
+              : "aus MET (Compendium)"}
+        </div>
       </div>
     {/if}
   </div>
