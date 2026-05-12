@@ -147,42 +147,57 @@
 
       <section>
         <h4>{$t("settings.profile")}</h4>
-        <label class="row inline">
-          {$t("settings.language")}
-          <select bind:value={$settings.language}>
-            <option value="de">Deutsch</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-        <label class="row inline">
-          {$t("settings.weight")}
-          <input type="number" min="20" max="200" step="0.1" bind:value={$settings.weightKg} />
-          kg
-        </label>
-        <label class="row inline">
-          {$t("settings.age")}
-          <input type="number" min="10" max="120" step="1" bind:value={$settings.ageYears} />
-          Jahre
-        </label>
-        <label class="row inline">
-          {$t("settings.sex")}
-          <select bind:value={$settings.sex}>
-            <option value="male">{$t("settings.sex.male")}</option>
-            <option value="female">{$t("settings.sex.female")}</option>
-          </select>
-        </label>
-        <label class="row inline">
-          {$t("settings.maxHR")}
-          <input type="number" min="60" max="250" step="1" bind:value={$settings.maxHR} placeholder="z. B. 190" />
-          bpm
-        </label>
-        <label class="row inline">
-          {$t("settings.powerDisplay")}
-          <select bind:value={$settings.powerUnit}>
-            <option value="W">Watt (W)</option>
-            <option value="W/kg">W pro kg</option>
-          </select>
-        </label>
+        <div class="field">
+          <label>{$t("settings.language")}</label>
+          <div class="field-input">
+            <select bind:value={$settings.language}>
+              <option value="de">Deutsch</option>
+              <option value="en">English</option>
+            </select>
+            <span class="unit"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.weight")}</label>
+          <div class="field-input">
+            <input type="number" min="20" max="200" step="0.1" bind:value={$settings.weightKg} />
+            <span class="unit">kg</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.age")}</label>
+          <div class="field-input">
+            <input type="number" min="10" max="120" step="1" bind:value={$settings.ageYears} />
+            <span class="unit">{$t("settings.years")}</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.sex")}</label>
+          <div class="field-input">
+            <select bind:value={$settings.sex}>
+              <option value="male">{$t("settings.sex.male")}</option>
+              <option value="female">{$t("settings.sex.female")}</option>
+            </select>
+            <span class="unit"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.maxHR")}</label>
+          <div class="field-input">
+            <input type="number" min="60" max="250" step="1" bind:value={$settings.maxHR} placeholder="z. B. 190" />
+            <span class="unit">{$t("settings.bpm")}</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.powerDisplay")}</label>
+          <div class="field-input">
+            <select bind:value={$settings.powerUnit}>
+              <option value="W">Watt (W)</option>
+              <option value="W/kg">W pro kg</option>
+            </select>
+            <span class="unit"></span>
+          </div>
+        </div>
       </section>
 
       <section>
@@ -337,6 +352,40 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .field:last-child { border-bottom: none; }
+  .field label {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .field-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 190px;
+    justify-content: flex-end;
+  }
+  .field-input input, .field-input select {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    box-sizing: border-box;
+  }
+  .unit {
+    width: 45px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: left;
+    white-space: nowrap;
+  }
   .row {
     display: flex;
     align-items: flex-start;
@@ -344,7 +393,6 @@
     margin-bottom: 10px;
     flex-wrap: wrap;
   }
-  .row.inline { align-items: center; }
   .row > span { display: flex; flex-direction: column; }
   .row > span strong { font-weight: 500; }
   .row > span small { color: var(--muted); font-size: 12px; }
