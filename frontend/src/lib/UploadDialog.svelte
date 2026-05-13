@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import { api, type Bike } from "./api";
+  import { t } from "./i18n";
 
   export let open = false;
   export let bikes: Bike[] = [];
@@ -40,7 +41,7 @@
 
   async function submit() {
     if (!file) {
-      error = "Bitte eine Datei auswählen.";
+      error = $t("upload.error.no_file");
       return;
     }
     busy = true;
@@ -72,22 +73,22 @@
     tabindex="-1"
   >
     <div class="modal" role="document">
-      <h3>Fahrt hochladen</h3>
+      <h3>{$t("upload.title")}</h3>
 
       <label class="field">
-        <span>Datei (.fit, .tcx, .gpx, optional .gz)</span>
+        <span>{$t("upload.file")}</span>
         <input type="file" accept=".fit,.tcx,.gpx,.gz,application/gzip" on:change={onFile} />
       </label>
 
       <label class="field">
-        <span>Name</span>
-        <input type="text" bind:value={name} placeholder="z. B. Feierabendrunde" />
+        <span>{$t("upload.name")}</span>
+        <input type="text" bind:value={name} placeholder={$t("upload.name_placeholder")} />
       </label>
 
       <label class="field">
-        <span>Rad</span>
+        <span>{$t("upload.bike")}</span>
         <select bind:value={bikeId}>
-          <option value="">– keines –</option>
+          <option value="">{$t("ride.bike.none")}</option>
           {#each bikes as b}
             <option value={b.id}>{b.name}</option>
           {/each}
@@ -95,7 +96,7 @@
       </label>
 
       <label class="field">
-        <span>Aktivitätstyp</span>
+        <span>{$t("upload.type")}</span>
         <select bind:value={activityType}>
           {#each ACTIVITY_TYPES as t}
             <option value={t}>{t}</option>
@@ -104,16 +105,16 @@
       </label>
 
       <label class="field">
-        <span>Beschreibung / Tags</span>
-        <textarea rows="3" bind:value={description} placeholder="optional"></textarea>
+        <span>{$t("upload.description")}</span>
+        <textarea rows="3" bind:value={description} placeholder={$t("upload.description_placeholder")}></textarea>
       </label>
 
       {#if error}<div class="error">{error}</div>{/if}
 
       <div class="actions">
-        <button type="button" on:click={close} disabled={busy}>Abbrechen</button>
+        <button type="button" on:click={close} disabled={busy}>{$t("ride.cancel")}</button>
         <button type="button" class="primary" on:click={submit} disabled={busy || !file}>
-          {busy ? "Lade hoch …" : "Hochladen"}
+          {busy ? $t("upload.submitting") : $t("upload.submit")}
         </button>
       </div>
     </div>

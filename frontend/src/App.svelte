@@ -5,6 +5,7 @@
   import RidesList from "./routes/RidesList.svelte";
   import RideDetail from "./routes/RideDetail.svelte";
   import SettingsDialog from "./lib/SettingsDialog.svelte";
+  import { t } from "./lib/i18n";
 
   export let url = "";
 
@@ -19,8 +20,8 @@
       <button
         type="button"
         class="cog"
-        title="Einstellungen"
-        aria-label="Einstellungen"
+        title={$t("settings.title")}
+        aria-label={$t("settings.title")}
         on:click={() => (settingsOpen = true)}
       >
         <SettingsIcon size={30} />

@@ -5,21 +5,22 @@
   import { api, type GeoResponse, type StreamField } from "./api";
   import { rampColor, robustRange } from "./colormap";
   import { hoverTime } from "./hover";
+  import { t } from "./i18n";
 
   export let activityId: number | string;
   export let hasGeo = true;
 
   type Mode = "none" | StreamField;
-  const MODE_LABEL: Record<Mode, string> = {
-    none: "Einfarbig",
-    power: "Power",
-    heart_rate: "Herzfrequenz",
-    speed: "Geschwindigkeit",
-    altitude: "Höhe",
-    cadence: "Trittfrequenz",
-    distance: "Distanz",
-    temperature: "Temperatur",
-  };
+  $: MODE_LABEL = {
+    none: $t("map.mode.none"),
+    power: $t("ride.card.power"),
+    heart_rate: $t("ride.card.hr"),
+    speed: $t("ride.chart.speed"),
+    altitude: $t("ride.chart.elevation"),
+    cadence: $t("ride.card.cadence"),
+    distance: $t("ride.card.distance"),
+    temperature: $t("ride.card.temperature"),
+  } as Record<Mode, string>;
   const UNIT: Partial<Record<Mode, string>> = {
     power: "W",
     heart_rate: "bpm",
@@ -257,12 +258,12 @@
 </script>
 
 {#if !hasGeo}
-  <div class="empty">Diese Fahrt enthält keine GPS-Daten.</div>
+  <div class="empty">{$t("map.no_geo")}</div>
 {:else}
   <div class="map-wrap">
     <div class="controls">
       <label>
-        Färben nach:
+        {$t("map.color_by")}
         <select bind:value={mode} on:change={onModeChange}>
           {#each availableModes as m}
             <option value={m}>{MODE_LABEL[m]}</option>

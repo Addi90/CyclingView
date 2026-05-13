@@ -11,6 +11,7 @@
   } from "lucide-svelte";
   import { settings } from "./settings";
   import { api, type Bike } from "./api";
+  import { t } from "./i18n";
 
   export let open = false;
 
@@ -47,9 +48,12 @@
     ingestMsg = "";
     try {
       const r = await api.ingestStrava();
-      ingestMsg = `+${r.ingested} neu · ${r.skipped} übersprungen · ${r.failed} Fehler`;
+      ingestMsg = $t("settings.strava_ingest_msg")
+        .replace("{ingested}", String(r.ingested))
+        .replace("{skipped}", String(r.skipped))
+        .replace("{failed}", String(r.failed));
     } catch (e: any) {
-      ingestMsg = `Fehler: ${e?.message ?? e}`;
+      ingestMsg = $t("settings.error").replace("{message}", e?.message ?? String(e));
     } finally {
       ingestBusy = false;
     }
@@ -63,7 +67,7 @@
     const input = e.target as HTMLInputElement;
     const f = input.files?.[0];
     if (!f) return;
-    if (importReplace && !confirm("Wirklich vorhandene Daten überschreiben? Diese Aktion ist nicht rückgängig.")) {
+    if (importReplace && !confirm($t("settings.import_confirm"))) {
       input.value = "";
       return;
     }
@@ -71,9 +75,9 @@
     importMsg = "";
     try {
       const r = await api.importData(f, importReplace);
-      importMsg = `${r.extracted} Dateien importiert. Bitte Seite neu laden.`;
+      importMsg = $t("settings.import_success").replace("{extracted}", String(r.extracted));
     } catch (err: any) {
-      importMsg = `Fehler: ${err?.message ?? err}`;
+      importMsg = $t("settings.error").replace("{message}", err?.message ?? String(err));
     } finally {
       importBusy = false;
       input.value = "";
@@ -93,20 +97,20 @@
       newBike = { name: "", brand: "", model: "" };
       await loadBikes();
     } catch (e: any) {
-      bikesError = e?.message ?? String(e);
+      bikesError = $t("settings.error").replace("{message}", e?.message ?? String(e));
     } finally {
       bikeBusy = false;
     }
   }
 
   async function removeBike(b: Bike) {
-    if (!confirm(`Rad „${b.name}" wirklich löschen?`)) return;
+    if (!confirm($t("settings.bike.delete_confirm").replace("{name}", b.name))) return;
     bikesError = "";
     try {
       await api.deleteBike(b.id);
       await loadBikes();
     } catch (e: any) {
-      bikesError = e?.message ?? String(e);
+      bikesError = $t("settings.error").replace("{message}", e?.message ?? String(e));
     }
   }
 
@@ -115,9 +119,11 @@
     recomputeMsg = "";
     try {
       const r = await api.powerBestsRecompute(true);
-      recomputeMsg = `${r.processed} verarbeitet · ${r.failed} Fehler`;
+      recomputeMsg = $t("settings.recompute_power_msg")
+        .replace("{processed}", String(r.processed))
+        .replace("{failed}", String(r.failed));
     } catch (e: any) {
-      recomputeMsg = `Fehler: ${e?.message ?? e}`;
+      recomputeMsg = $t("settings.error").replace("{message}", e?.message ?? String(e));
     } finally {
       recomputeBusy = false;
     }
@@ -135,79 +141,101 @@
   >
     <div class="modal" role="document">
       <header class="head">
-        <h3>Einstellungen</h3>
+        <h3>{$t("settings.title")}</h3>
         <button class="x" type="button" on:click={close} aria-label="Schließen"><X size={18} /></button>
       </header>
 
       <section>
-        <h4>Profil</h4>
-        <label class="row inline">
-          Körpergewicht
-          <input type="number" min="20" max="200" step="0.1" bind:value={$settings.weightKg} />
-          kg
-        </label>
-        <label class="row inline">
-          Alter
-          <input type="number" min="10" max="120" step="1" bind:value={$settings.ageYears} />
-          Jahre
-        </label>
-        <label class="row inline">
-          Geschlecht
-          <select bind:value={$settings.sex}>
-            <option value="male">männlich</option>
-            <option value="female">weiblich</option>
-          </select>
-        </label>
-        <label class="row inline">
-          Max. Herzfrequenz
-          <input type="number" min="60" max="250" step="1" bind:value={$settings.maxHR} placeholder="z. B. 190" />
-          bpm
-        </label>
-        <label class="row inline">
-          Power-Anzeige
-          <select bind:value={$settings.powerUnit}>
-            <option value="W">Watt (W)</option>
-            <option value="W/kg">W pro kg</option>
-          </select>
-        </label>
+        <h4>{$t("settings.profile")}</h4>
+        <div class="field">
+          <label>{$t("settings.language")}</label>
+          <div class="field-input">
+            <select bind:value={$settings.language}>
+              <option value="de">Deutsch</option>
+              <option value="en">English</option>
+            </select>
+            <span class="unit"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.weight")}</label>
+          <div class="field-input">
+            <input type="number" min="20" max="200" step="0.1" bind:value={$settings.weightKg} />
+            <span class="unit">kg</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.age")}</label>
+          <div class="field-input">
+            <input type="number" min="10" max="120" step="1" bind:value={$settings.ageYears} />
+            <span class="unit">{$t("settings.years")}</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.sex")}</label>
+          <div class="field-input">
+            <select bind:value={$settings.sex}>
+              <option value="male">{$t("settings.sex.male")}</option>
+              <option value="female">{$t("settings.sex.female")}</option>
+            </select>
+            <span class="unit"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.maxHR")}</label>
+          <div class="field-input">
+            <input type="number" min="60" max="250" step="1" bind:value={$settings.maxHR} placeholder="z. B. 190" />
+            <span class="unit">{$t("settings.bpm")}</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>{$t("settings.powerDisplay")}</label>
+          <div class="field-input">
+            <select bind:value={$settings.powerUnit}>
+              <option value="W">Watt (W)</option>
+              <option value="W/kg">W pro kg</option>
+            </select>
+            <span class="unit"></span>
+          </div>
+        </div>
       </section>
 
       <section>
-        <h4>Auswertung</h4>
+        <h4>{$t("settings.analysis")}</h4>
 
         <label class="row">
           <input type="checkbox" bind:checked={$settings.excludeZeroPower} />
           <span>
-            <strong>Power: 0 W ausblenden</strong>
-            <small>Rollphasen aus Charts und Mittelwerten entfernen.</small>
+            <strong>{$t("settings.exclude_zero_power")}</strong>
+            <small>{$t("settings.exclude_zero_power_hint")}</small>
           </span>
         </label>
 
         <label class="row">
           <input type="checkbox" bind:checked={$settings.excludeZeroCadence} />
           <span>
-            <strong>Trittfrequenz: 0 rpm ausblenden</strong>
-            <small>Rollen / Stillstand nicht in Cadence-Statistik.</small>
+            <strong>{$t("settings.exclude_zero_cadence")}</strong>
+            <small>{$t("settings.exclude_zero_cadence_hint")}</small>
           </span>
         </label>
 
         <label class="row">
           <input type="checkbox" bind:checked={$settings.hidePauses} />
           <span>
-            <strong>Fahrtpausen ausblenden</strong>
-            <small>Phasen mit Geschwindigkeit ≈ 0 aus Charts entfernen.</small>
+            <strong>{$t("settings.hide_pauses")}</strong>
+            <small>{$t("settings.hide_pauses_hint")}</small>
           </span>
         </label>
 
         {#if $settings.hidePauses}
           <div class="sub">
             <label class="inline">
-              Pause ab
+              {$t("settings.pause_threshold")}
               <input type="number" min="1" max="120" step="1" bind:value={$settings.pauseThresholdS} />
-              Sekunden
+              {$t("settings.seconds")}
             </label>
             <label class="inline">
-              Schwelle
+              {$t("settings.pause_speed")}
               <input type="number" min="0" max="3" step="0.1" bind:value={$settings.pauseSpeedMs} />
               m/s
             </label>
@@ -215,27 +243,8 @@
         {/if}
       </section>
 
-      <!-- <section>
-        <h4>Darstellung</h4>
-        <label class="row inline">
-          Einheiten
-          <select bind:value={$settings.units}>
-            <option value="metric">Metrisch (km, km/h, m)</option>
-            <option value="imperial">Imperial (mi, mph, ft)</option>
-          </select>
-        </label>
-        <label class="row inline">
-          Theme
-          <select bind:value={$settings.theme}>
-            <option value="dark">Dunkel</option>
-            <option value="light">Hell</option>
-            <option value="system">System</option>
-          </select>
-        </label>
-      </section> -->
-
       <section>
-        <h4>Räder</h4>
+        <h4>{$t("settings.bikes")}</h4>
         {#if bikesError}<small class="status error-text">{bikesError}</small>{/if}
         {#if bikes.length}
           <ul class="bike-list">
@@ -245,61 +254,61 @@
                 {#if b.brand || b.model}
                   <small class="dim">{[b.brand, b.model].filter(Boolean).join(" ")}</small>
                 {/if}
-                <button type="button" class="del" on:click={() => removeBike(b)} title="Löschen"><Trash2 size={14} /></button>
+                <button type="button" class="del" on:click={() => removeBike(b)} title={$t("ride.delete")}><Trash2 size={14} /></button>
               </li>
             {/each}
           </ul>
         {/if}
         <div class="add-bike">
-          <input type="text" placeholder="Name *" bind:value={newBike.name} />
-          <input type="text" placeholder="Marke" bind:value={newBike.brand} />
-          <input type="text" placeholder="Modell" bind:value={newBike.model} />
+          <input type="text" placeholder={$t("settings.bike.name")} bind:value={newBike.name} />
+          <input type="text" placeholder={$t("settings.bike.brand")} bind:value={newBike.brand} />
+          <input type="text" placeholder={$t("settings.bike.model")} bind:value={newBike.model} />
           <button type="button" on:click={addBike} disabled={bikeBusy || !newBike.name.trim()}>
-            <Plus size={16} /> Rad hinzufügen
+            <Plus size={16} /> {$t("settings.bike.add")}
           </button>
         </div>
       </section>
 
       <section>
-        <h4>Daten</h4>
+        <h4>{$t("settings.data")}</h4>
 
         <div class="row">
           <button type="button" on:click={runStravaIngest} disabled={ingestBusy} class="wide">
-            {#if ingestBusy}Ingestiere…{:else}<RefreshCw size={16} /> Strava-Export ingestieren{/if}
+            {#if ingestBusy}{$t("settings.strava_ingest_busy")}{:else}<RefreshCw size={16} /> {$t("settings.strava_ingest")}{/if}
           </button>
           {#if ingestMsg}<small class="status">{ingestMsg}</small>{/if}
         </div>
 
         <div class="row">
           <button type="button" on:click={recomputePowerBests} disabled={recomputeBusy} class="wide">
-            {#if recomputeBusy}Berechne…{:else}<Zap size={16} /> Power-Bestwerte neu berechnen{/if}
+            {#if recomputeBusy}{$t("settings.recompute_power_busy")}{:else}<Zap size={16} /> {$t("settings.recompute_power")}{/if}
           </button>
           {#if recomputeMsg}<small class="status">{recomputeMsg}</small>{/if}
         </div>
 
         <div class="row">
-          <button type="button" on:click={downloadExport} class="wide"><Download size={16} /> Daten exportieren (.zip)</button>
+          <button type="button" on:click={downloadExport} class="wide"><Download size={16} /> {$t("settings.export")}</button>
         </div>
 
         <div class="row">
           <label class="file-import wide">
             {#if importBusy}
-              <span>Importiere…</span>
+              <span>{$t("settings.import_busy")}</span>
             {:else}
-              <span><Upload size={16} /> Daten importieren</span>
+              <span><Upload size={16} /> {$t("settings.import")}</span>
             {/if}
             <input type="file" accept=".zip,application/zip" on:change={onImportFile} disabled={importBusy} />
           </label>
           <label class="inline tight">
             <input type="checkbox" bind:checked={importReplace} />
-            <small>vorher löschen (Reset)</small>
+            <small>{$t("settings.import_replace")}</small>
           </label>
           {#if importMsg}<small class="status">{importMsg}</small>{/if}
         </div>
       </section>
 
       <footer class="actions">
-        <button type="button" class="primary" on:click={close}>Fertig</button>
+        <button type="button" class="primary" on:click={close}>{$t("settings.done")}</button>
       </footer>
     </div>
   </div>
@@ -343,6 +352,40 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .field:last-child { border-bottom: none; }
+  .field label {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .field-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 190px;
+    justify-content: flex-end;
+  }
+  .field-input input, .field-input select {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    box-sizing: border-box;
+  }
+  .unit {
+    width: 45px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: left;
+    white-space: nowrap;
+  }
   .row {
     display: flex;
     align-items: flex-start;
@@ -350,7 +393,6 @@
     margin-bottom: 10px;
     flex-wrap: wrap;
   }
-  .row.inline { align-items: center; }
   .row > span { display: flex; flex-direction: column; }
   .row > span strong { font-weight: 500; }
   .row > span small { color: var(--muted); font-size: 12px; }

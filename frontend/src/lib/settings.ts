@@ -26,6 +26,8 @@ export interface AppSettings {
   sex: "male" | "female";
   /** Maximum heart rate in bpm (used for HR zone calculation). Null = disabled. */
   maxHR: number | null;
+  /** Language for display. */
+  language: "de" | "en";
 }
 
 const DEFAULTS: AppSettings = {
@@ -41,6 +43,7 @@ const DEFAULTS: AppSettings = {
   ageYears: 35,
   sex: "male",
   maxHR: null,
+  language: "de",
 };
 
 const KEY = "cycling-view-settings-v1";
