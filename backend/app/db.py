@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS activities (
     has_cadence     INTEGER NOT NULL DEFAULT 0,
 
     point_count     INTEGER NOT NULL DEFAULT 0,
+    estimated_power INTEGER NOT NULL DEFAULT 0,
     parquet_path    TEXT
 );
 
@@ -86,6 +87,11 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
 def init_db(db_path: Path | None = None) -> None:
     with connect(db_path) as conn:
         conn.executescript(SCHEMA)
+        # Migration: add estimated_power if missing
+        try:
+            conn.execute("ALTER TABLE activities ADD COLUMN estimated_power INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # already exists
         conn.commit()
 
 

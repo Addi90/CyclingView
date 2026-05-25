@@ -47,6 +47,7 @@ export interface Ride {
   has_cadence: number;
 
   point_count: number;
+  estimated_power: number;
 }
 
 export interface RidesPage {
@@ -135,6 +136,7 @@ export interface AllTimeBestEntry {
   watts: number;
   start_time: string;
   name: string | null;
+  estimated_power: number;
 }
 
 export const api = {
