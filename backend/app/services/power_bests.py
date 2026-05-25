@@ -100,13 +100,13 @@ def recompute_all(force: bool = False) -> dict[str, int]:
 
 
 def all_time_leaderboard(top_n: int = 5) -> dict[int, list[dict]]:
-    """Return {window_s: [{activity_id, watts, start_time, name}, ...]}."""
+    """Return {window_s: [{activity_id, watts, start_time, name, estimated_power}, ...]}."""
     out: dict[int, list[dict]] = {}
     with get_conn() as conn:
         for w in WINDOWS_S:
             rows = conn.execute(
                 """
-                SELECT pb.activity_id, pb.watts, a.start_time, a.name
+                SELECT pb.activity_id, pb.watts, a.start_time, a.name, a.estimated_power
                 FROM power_bests pb
                 JOIN activities a ON a.id = pb.activity_id
                 WHERE pb.window_s = ?

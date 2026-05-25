@@ -14,6 +14,8 @@
   export let syncKey = "ride";
   export let valueDigits = 0;
   export let zones: { from: number; to: number; color: string }[] | null = null;
+  export let lowQ = 0.005;
+  export let highQ = 0.995;
 
   let container: HTMLDivElement;
   let plot: uPlot | null = null;
@@ -44,10 +46,10 @@
     return [x, y];
   }
 
-  /** Robust y-scale: trim outliers (1st/99th percentile) so a single sensor
+  /** Robust y-scale: trim outliers (lowQ/highQ percentile) so a single sensor
    *  spike (e.g. cadence 65535) doesn't flatten the real signal to a line at 0. */
   function yRange(): [number, number] | null {
-    const [lo, hi] = robustRange(ys, 0.005, 0.995);
+    const [lo, hi] = robustRange(ys, lowQ, highQ);
     if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo === hi) return null;
     const pad = (hi - lo) * 0.08 || 1;
     return [Math.min(lo - pad, lo), hi + pad];
@@ -246,4 +248,8 @@
   :global(.u-legend .u-marker) { border-color: var(--border) !important; }
   :global(.u-legend th, .u-legend td) { color: var(--text) !important; }
   :global(.u-cursor-pt) { display: none !important; }
+  :global(.u-select) {
+    background: rgba(252, 82, 0, 0.07) !important;
+    border: 1px solid var(--accent) !important;
+  }
 </style>

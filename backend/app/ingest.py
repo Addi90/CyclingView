@@ -50,6 +50,7 @@ WANTED_HEADERS = {
     "Activity Description": "description",
     "Activity Gear": "gear",
     "Filename": "filename",
+    "Device Watts": "device_watts",
 }
 
 
@@ -173,6 +174,7 @@ def ingest_uploaded_file(
         "bike_id": bike_id,
         "filename": str(dst_path.relative_to(settings.data_dir)),
         "parquet_path": str(parquet_path.relative_to(settings.data_dir)),
+        "estimated_power": 0, # Uploaded files are assumed measured for now
         **summary,
     }
     with connect() as conn:
@@ -253,6 +255,9 @@ def ingest(export_dir: Path, force: bool = False) -> tuple[int, int, int]:
             bike_name = (act.get("gear") or "").strip()
             bike_id = bike_map.get(bike_name)
 
+            device_watts = act.get("device_watts", "").lower() == "true"
+            is_estimated = 1 if (summary.get("has_power") and not device_watts) else 0
+
             db_row = {
                 "id": act_id,
                 "start_time": start_iso,
@@ -262,6 +267,7 @@ def ingest(export_dir: Path, force: bool = False) -> tuple[int, int, int]:
                 "bike_id": bike_id,
                 "filename": filename,
                 "parquet_path": str(parquet_path.relative_to(settings.data_dir)),
+                "estimated_power": is_estimated,
                 **summary,
             }
             upsert_activity(conn, db_row)

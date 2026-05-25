@@ -17,6 +17,7 @@
   let bests: PowerBest[] = [];
   let leaderboard: Record<string, AllTimeBestEntry[]> = {};
   let windowsS: number[] = [];
+  let estimatedPower = 0;
   let error = "";
   let loading = false;
 
@@ -28,6 +29,7 @@
         const res = await api.powerBestsForRide(activityId);
         bests = res.bests;
         windowsS = res.windows_s;
+        estimatedPower = (res as any).estimated_power ?? 0;
       } else {
         const res = await api.powerBestsAllTime(1);
         leaderboard = res.leaderboard;
@@ -77,7 +79,12 @@
           {#each bests as b}
             <tr class:none={b.watts == null}>
               <td>{fmtWindow(b.window_s)}</td>
-              <td class="num">{fmtPower(b.watts, $settings.weightKg, $settings.powerUnit)}</td>
+              <td class="num">
+                {fmtPower(b.watts, $settings.weightKg, $settings.powerUnit)}
+                {#if estimatedPower}
+                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {/if}
+              </td>
             </tr>
           {/each}
         {:else}
@@ -85,7 +92,12 @@
             {@const top = leaderboard[String(w)]?.[0]}
             <tr class:none={!top}>
               <td>{fmtWindow(w)}</td>
-              <td class="num">{fmtPower(top?.watts ?? null, $settings.weightKg, $settings.powerUnit)}</td>
+              <td class="num">
+                {fmtPower(top?.watts ?? null, $settings.weightKg, $settings.powerUnit)}
+                {#if top?.estimated_power}
+                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {/if}
+              </td>
               {#if !compact}
                 <td class="ride">
                   {#if top}
@@ -138,6 +150,12 @@
   }
   th.powerUnit { text-align: right; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .estimated {
+    color: var(--accent);
+    cursor: help;
+    margin-left: 2px;
+    font-weight: bold;
+  }
   td.ride { font-size: 12px; }
   td.ride small { display: block; }
   .dim { color: var(--muted); }
