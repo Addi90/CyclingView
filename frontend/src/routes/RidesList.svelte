@@ -163,9 +163,9 @@
           {#each sortedRides as r}
             <tr>
               <td class="col-date"><Link to={`/rides/${r.id}`}>{fmtDateShort(r.start_time)}</Link></td>
+              <td class="col-bike">{r.bike_name ?? "–"}</td>
               <td class="col-name"><Link to={`/rides/${r.id}`}>{r.name ?? "–"}</Link></td>
               <td class="num col-dist">{fmtKm(r.distance_m)}</td>
-              <td class="col-bike">{r.bike_name ?? "–"}</td>
               <td class="num col-dur">{fmtDuration(r.moving_s ?? r.elapsed_s)}</td>
               <td class="num col-speed">{fmtKmh(r.avg_speed_ms)}</td>
               <td class="num col-power">{fmtNum(r.avg_power, 0, " W")}</td>
