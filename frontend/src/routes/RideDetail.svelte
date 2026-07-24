@@ -303,7 +303,12 @@
     </div>
     {#if ride.has_power}
       <div class="card power">
-        <div class="card-title">{$t("ride.card.power")}</div>
+        <div class="card-title">
+          {$t("ride.card.power")}
+          {#if ride.estimated_power}
+            <span class="est-label">({$t("ride.power.estimated")})</span>
+          {/if}
+        </div>
         <div class="card-value">⌀ {fmtNum(powerStats.avg ?? ride.avg_power, 0, " W")}</div>
         <div class="card-sub">
           {$t("rides.col.np")} {fmtNum(powerStats.np ?? ride.np_power, 0, " W")} · max {fmtNum(powerStats.max ?? ride.max_power, 0, " W")}
@@ -367,7 +372,7 @@
         <StreamChart label={$t("ride.chart.elevation")} unit="m" color="#fc5200" xs={ts} ys={altitude} {syncKey} />
       {/if}
       {#if hasAny(speedKmh)}
-        <StreamChart label={$t("ride.chart.speed")} unit="km/h" color="#fc5200" xs={ts} ys={speedKmh} {syncKey} valueDigits={1} />
+        <StreamChart label={$t("ride.chart.speed")} unit="km/h" color="#fc5200" xs={ts} ys={speedKmh} {syncKey} valueDigits={1} highQ={0.999} />
       {/if}
       {#if hasAny(power)}
         <StreamChart label={$t("ride.card.power")} unit="W" color="#fc5200" xs={ts} ys={power} {syncKey} />
@@ -458,6 +463,7 @@
   .card.hr    { border-left: 3px solid var(--hr); }
   .card.cad   { border-left: 3px solid var(--cad); }
   .card-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .est-label { font-size: 11px; text-transform: none; color: var(--accent); margin-left: 4px; vertical-align: middle; }
   .card-value { font-size: 22px; font-weight: 600; margin-top: 4px; }
   .card-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .zone-cards {

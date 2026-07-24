@@ -168,8 +168,18 @@
               <td class="num col-dist">{fmtKm(r.distance_m)}</td>
               <td class="num col-dur">{fmtDuration(r.moving_s ?? r.elapsed_s)}</td>
               <td class="num col-speed">{fmtKmh(r.avg_speed_ms)}</td>
-              <td class="num col-power">{fmtNum(r.avg_power, 0, " W")}</td>
-              <td class="num col-np">{fmtNum(r.np_power, 0, " W")}</td>
+              <td class="num col-power">
+                {fmtNum(r.avg_power, 0, " W")}
+                {#if r.estimated_power}
+                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {/if}
+              </td>
+              <td class="num col-np">
+                {fmtNum(r.np_power, 0, " W")}
+                {#if r.estimated_power}
+                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {/if}
+              </td>
               <td class="num col-hr">{fmtNum(r.avg_hr, 0, " bpm")}</td>
               <td class="num col-elev">{fmtNum(r.elevation_gain_m, 0, " m")}</td>
             </tr>
@@ -253,6 +263,12 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     -webkit-overflow-scrolling: touch;
+  }
+  .estimated {
+    color: var(--accent);
+    cursor: help;
+    margin-left: 2px;
+    font-weight: bold;
   }
 
   table.rides {

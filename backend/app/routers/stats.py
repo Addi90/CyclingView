@@ -171,8 +171,14 @@ def power_windows() -> dict[str, list[int]]:
 @router.get("/power-bests/{activity_id}")
 def power_bests_for_ride(activity_id: int) -> dict[str, Any]:
     bests = get_or_compute_for_activity(activity_id)
+    est = 0
+    with get_conn() as conn:
+        row = conn.execute("SELECT estimated_power FROM activities WHERE id = ?", (activity_id,)).fetchone()
+        if row:
+            est = row["estimated_power"]
     return {
         "activity_id": activity_id,
+        "estimated_power": est,
         "windows_s": list(WINDOWS_S),
         "bests": [{"window_s": w, "watts": bests.get(w)} for w in WINDOWS_S],
     }
