@@ -93,9 +93,18 @@
             <tr class:none={!top}>
               <td>{fmtWindow(w)}</td>
               <td class="num">
-                {fmtPower(top?.watts ?? null, $settings.weightKg, $settings.powerUnit)}
-                {#if top?.estimated_power}
-                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {#if compact && top}
+                  <Link to={`/rides/${top.activity_id}`}>
+                    {fmtPower(top.watts, $settings.weightKg, $settings.powerUnit)}
+                    {#if top.estimated_power}
+                      <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                    {/if}
+                  </Link>
+                {:else}
+                  {fmtPower(top?.watts ?? null, $settings.weightKg, $settings.powerUnit)}
+                  {#if top?.estimated_power}
+                    <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                  {/if}
                 {/if}
               </td>
               {#if !compact}
