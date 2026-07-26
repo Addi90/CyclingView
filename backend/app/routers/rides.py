@@ -5,13 +5,93 @@ import math
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
+from lxml import etree
 from pydantic import BaseModel
 
 from ..db import get_conn
 from ..services.streams import STREAM_FIELDS, downsample, load_stream
 
 router = APIRouter(prefix="/api")
+
+# GPX namespaces
+GPX_NS = "http://www.topografix.com/GPX/1/1"
+GPXTPX_NS = "http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
+
+
+def _build_gpx(
+    df: pd.DataFrame,
+    name: str | None,
+) -> bytes:
+    """Build a GPX 1.1 file from a stream DataFrame."""
+    root = etree.Element(
+        f"{{{GPX_NS}}}gpx",
+        version="1.1",
+        creator="cycling_view",
+        nsmap={
+            None: GPX_NS,
+            "gpxtpx": GPXTPX_NS,
+        },
+    )
+
+    metadata = etree.SubElement(root, f"{{{GPX_NS}}}metadata")
+    if name:
+        etree.SubElement(metadata, f"{{{GPX_NS}}}name").text = name
+
+    trk = etree.SubElement(root, f"{{{GPX_NS}}}trk")
+    if name:
+        etree.SubElement(trk, f"{{{GPX_NS}}}name").text = name
+    trkseg = etree.SubElement(trk, f"{{{GPX_NS}}}trkseg")
+
+    for _, row in df.iterrows():
+        lat = row.get("lat")
+        lon = row.get("lon")
+        if pd.isna(lat) or pd.isna(lon):
+            continue
+
+        tp = etree.SubElement(
+            trkseg,
+            f"{{{GPX_NS}}}trkpt",
+            attrib={"lat": f"{lat:.6f}", "lon": f"{lon:.6f}"},
+        )
+
+        # Timestamp
+        t = row.get("t")
+        if t is not None and pd.notna(t):
+            etree.SubElement(tp, f"{{{GPX_NS}}}time").text = t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Elevation
+        ele = row.get("altitude")
+        if ele is not None and pd.notna(ele):
+            etree.SubElement(tp, f"{{{GPX_NS}}}ele").text = f"{ele:.1f}"
+
+        # Extensions for HR, cadence, temperature, power
+        has_ext = False
+        for field, tag in [
+            ("heart_rate", "hr"),
+            ("cadence", "cad"),
+            ("temperature", "atemp"),
+        ]:
+            val = row.get(field)
+            if val is not None and pd.notna(val):
+                if not has_ext:
+                    ext = etree.SubElement(tp, f"{{{GPX_NS}}}extensions")
+                    tpx = etree.SubElement(ext, f"{{{GPXTPX_NS}}}TrackPointExtension")
+                    has_ext = True
+                etree.SubElement(tpx, f"{{{GPXTPX_NS}}}{tag}").text = str(int(val))
+
+        # Power uses a different element name
+        pwr = row.get("power")
+        if pwr is not None and pd.notna(pwr):
+            if not has_ext:
+                ext = etree.SubElement(tp, f"{{{GPX_NS}}}extensions")
+                tpx = etree.SubElement(ext, f"{{{GPXTPX_NS}}}TrackPointExtension")
+                has_ext = True
+            etree.SubElement(tpx, f"{{{GPXTPX_NS}}}PowerInWatts").text = str(int(pwr))
+
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8")
 
 
 def _row_to_dict(row) -> dict[str, Any]:
@@ -239,3 +319,30 @@ def get_geo(
             "streams": streams,
         },
     }
+
+
+@router.get("/rides/{activity_id}/export/gpx")
+def export_gpx(activity_id: int) -> Response:
+    """Export a ride as a GPX 1.1 file."""
+    row = _fetch_activity(activity_id)
+    if not row["has_geo"]:
+        raise HTTPException(404, "activity has no GPS data")
+
+    try:
+        df = load_stream(activity_id, row["parquet_path"])
+    except FileNotFoundError:
+        raise HTTPException(404, "stream file missing")
+
+    df = df.dropna(subset=["lat", "lon"])
+    if df.empty:
+        raise HTTPException(404, "no valid GPS points")
+
+    gpx_bytes = _build_gpx(df, row["name"])
+
+    return Response(
+        content=gpx_bytes,
+        media_type="application/gpx+xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="{row["name"] or activity_id}.gpx"'
+        },
+    )

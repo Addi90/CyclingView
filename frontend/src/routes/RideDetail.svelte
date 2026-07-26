@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { navigate } from "svelte-routing";
-  import { Pencil, Trash2, Bike as BikeIcon } from "lucide-svelte";
+  import { Pencil, Trash2, Bike as BikeIcon, Download } from "lucide-svelte";
   import { api, type Ride, type StreamsResponse, type StreamField, type Bike } from "../lib/api";
   import { fmtKm, fmtKmh, fmtDuration, fmtNum, fmtDate } from "../lib/format";
   import { t } from "../lib/i18n";
@@ -274,6 +274,9 @@
         <h2>{ride.name ?? $t("ride.title_fallback")}</h2>
         <div class="head-actions">
           <button type="button" on:click={beginEdit} title={$t("ride.edit")}><Pencil size={14} /> {$t("ride.edit")}</button>
+          {#if ride.has_geo === 1}
+            <a href={`/api/rides/${ride.id}/export/gpx`} title={$t("ride.export_gpx")}><Download size={14} /> {$t("ride.export_gpx")}</a>
+          {/if}
           <button type="button" class="danger" on:click={deleteRide} title={$t("ride.delete")}><Trash2 size={14} /> {$t("ride.delete")}</button>
         </div>
       </div>
@@ -427,7 +430,7 @@
   .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .title-row h2 { flex: 1; }
   .head-actions { display: flex; gap: 8px; }
-  .head-actions button { display: inline-flex; align-items: center; gap: 6px; }
+  .head-actions button, .head-actions a { display: inline-flex; align-items: center; gap: 6px; }
   .head-actions .danger { color: #ef4444; border-color: #ef4444; }
   .head-actions .danger:hover { background: rgba(239, 68, 68, 0.1); }
   .edit-form {

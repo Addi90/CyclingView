@@ -206,6 +206,7 @@ export const api = {
     return res.json();
   },
 
+  exportGpxUrl: (id: number | string): string => `${BASE}/rides/${id}/export/gpx`,
   exportDataUrl: (): string => `${BASE}/export`,
 
   importData: async (file: File, replace = false): Promise<{ extracted: number; data_dir: string; replaced: boolean }> => {
