@@ -16,7 +16,7 @@ init() {
 start() {
   echo "Starting backend..."
   # Run uvicorn in the background using the venv's python
-  (cd backend && ./.venv/bin/python3 -m uvicorn app.main:app --port 8000) &
+  (cd backend && ./.venv/bin/python3 -m uvicorn app.main:app --reload --port 8000 --app-dir backend) &
   echo $! >> $PID_FILE
   
   echo "Starting frontend..."
