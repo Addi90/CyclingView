@@ -4,7 +4,7 @@
   import "maplibre-gl/dist/maplibre-gl.css";
   import { api, type GeoResponse, type StreamField } from "./api";
   import { rampColor, robustRange } from "./colormap";
-  import { hoverTime } from "./hover";
+  import { hoverTime, selectionRange } from "./hover";
   import { t } from "./i18n";
 
   export let activityId: number | string;
@@ -39,9 +39,12 @@
   let legend: { min: number; max: number; unit: string; stops: number[] } | null = null;
   let hoverMarker: maplibregl.Marker | null = null;
   let unsubHover: (() => void) | null = null;
+  let unsubSelection: (() => void) | null = null;
 
   const SOURCE_ID = "ride-route";
   const LAYER_ID = "ride-route-layer";
+  const SELECTION_SOURCE_ID = "ride-selection";
+  const SELECTION_LAYER_ID = "ride-selection-layer";
 
   const OSM_STYLE: maplibregl.StyleSpecification = {
     version: 8,
@@ -179,6 +182,33 @@
           "line-width": ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 4, 14, 8, 18, 12],
         },
       });
+      // Selection highlight line (hidden until a selection is made)
+      map.addSource(SELECTION_SOURCE_ID, {
+        type: "geojson",
+        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] as [number, number][] } },
+      });
+      map.addLayer({
+        id: SELECTION_LAYER_ID + "-border",
+        type: "line",
+        source: SELECTION_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#fc5200",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 8, 10, 11, 14, 17, 18, 22],
+          "line-opacity": 0.9,
+        },
+      });
+      map.addLayer({
+        id: SELECTION_LAYER_ID,
+        type: "line",
+        source: SELECTION_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 5, 10, 7, 14, 12, 18, 16],
+          "line-opacity": 0.85,
+        },
+      });
     }
   }
 
@@ -246,12 +276,37 @@
     m.setLngLat(coords[i] as [number, number]).addTo(map);
   }
 
+  function updateSelection(range: { t0: number; t1: number } | null) {
+    if (!map || !geo) return;
+    const src = map.getSource(SELECTION_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+    if (range == null) {
+      src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: [] as [number, number][] } });
+      return;
+    }
+    const ts = geo.properties.t;
+    const coords = geo.geometry.coordinates;
+    if (!ts.length || !coords.length) return;
+    const i0 = nearestIndex(ts, range.t0);
+    const i1 = nearestIndex(ts, range.t1);
+    if (i0 < 0 || i1 < 0 || i0 >= coords.length || i1 >= coords.length) return;
+    const lo = Math.min(i0, i1);
+    const hi = Math.max(i0, i1);
+    const selCoords: [number, number][] = [];
+    for (let i = lo; i <= hi; i++) {
+      selCoords.push(coords[i] as [number, number]);
+    }
+    src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: selCoords } });
+  }
+
   onMount(() => {
     if (hasGeo) load();
     unsubHover = hoverTime.subscribe((t) => updateHover(t));
+    unsubSelection = selectionRange.subscribe((r) => updateSelection(r));
   });
   onDestroy(() => {
     unsubHover?.();
+    unsubSelection?.();
     hoverMarker?.remove();
     map?.remove();
   });

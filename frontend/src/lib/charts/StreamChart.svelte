@@ -3,7 +3,7 @@
   import uPlot, { type Options as UPlotOptions } from "uplot";
   import "uplot/dist/uPlot.min.css";
   import { robustRange } from "../colormap";
-  import { hoverTime } from "../hover";
+  import { hoverTime, selectionRange } from "../hover";
 
   export let label: string;
   export let color: string = "#fc5200";
@@ -110,9 +110,24 @@
             const idx = u.cursor.idx;
             if (idx == null) {
               hoverTime.set(null);
+              selectionRange.set(null);
             } else {
               const t = u.data[0][idx];
               hoverTime.set(typeof t === "number" ? t : null);
+            }
+          },
+        ],
+        setSelect: [
+          (u) => {
+            const { left, width, show } = u.select;
+            if (width <= 0 || show === false) {
+              selectionRange.set(null);
+              return;
+            }
+            const t0 = u.posToVal(left, "x");
+            const t1 = u.posToVal(left + width, "x");
+            if (typeof t0 === "number" && typeof t1 === "number") {
+              selectionRange.set({ t0: Math.min(t0, t1), t1: Math.max(t0, t1) });
             }
           },
         ],
@@ -195,11 +210,13 @@
     ro = new ResizeObserver(() => resize());
     ro.observe(container);
     window.addEventListener("resize", resize);
+    container.addEventListener("mouseup", () => selectionRange.set(null));
   });
 
   onDestroy(() => {
     window.removeEventListener("resize", resize);
     ro?.disconnect();
+    container?.removeEventListener("mouseup", () => selectionRange.set(null));
     plot?.destroy();
   });
 </script>
