@@ -45,6 +45,21 @@ docker compose up --build
 - **Statistics** — Overall totals, per-year trends, per-bike breakdowns, longest ride tracking
 - **Ride editing** — Edit name, type, description, and bike assignment directly in the UI
 
+## Development
+
+```bash
+do help              # list commands
+do test              # run the backend test suite (tests/backend/, pytest)
+do serve [port]      # start the API (default port 8000)
+do ingest <export>   # ingest a Strava bulk export
+do docker            # docker compose up --build
+```
+
+Backend tests live in `tests/backend/` and are configured by the root `pytest.ini`
+(the `do` script reuses `backend/.venv`). CI runs the same suite on every push/PR
+(`.github/workflows/backend-tests.yml`). Tests never touch the real `data/`
+directory.
+
 ## Layout
 
 ```

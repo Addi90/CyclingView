@@ -1,58 +1,30 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Convenience entry point for common development tasks.
+set -euo pipefail
+cd "$(dirname "$0")"
 
-PID_FILE=".do.pids"
+PY=backend/.venv/bin/python
 
-init() {
-  echo "Initializing backend environment..."
-  python3 -m venv backend/.venv
-  ./backend/.venv/bin/pip install -e backend
-  
-  echo "Installing frontend dependencies..."
-  (cd frontend && npm install)
-  
-  echo "Initialization complete."
-}
-
-start() {
-  echo "Starting backend..."
-  # Run uvicorn in the background using the venv's python
-  (cd backend && ./.venv/bin/python3 -m uvicorn app.main:app --port 8000) &
-  echo $! >> $PID_FILE
-  
-  echo "Starting frontend..."
-  (cd frontend && npm run dev) &
-  echo $! >> $PID_FILE
-  
-  echo "Application started. PIDs saved to $PID_FILE"
-}
-
-stop() {
-  if [ -f "$PID_FILE" ]; then
-    echo "Stopping application..."
-    while read -r pid; do
-      # Kill the process and its children
-      pkill -P "$pid" 2>/dev/null
-      kill "$pid" 2>/dev/null
-    done < "$PID_FILE"
-    rm "$PID_FILE"
-    echo "Application stopped."
-  else
-    echo "No running processes found in $PID_FILE."
-  fi
-}
-
-case "$1" in
-  init)
-    init
+cmd="${1:-help}"
+case "$cmd" in
+  test)
+    "$PY" -m pytest -q
     ;;
-  start)
-    start
+  ingest)
+    "$PY" -m app.ingest "${2:?usage: do ingest <strava_export_dir>}"
     ;;
-  stop)
-    stop
+  serve)
+    exec "$PY" -m uvicorn app.main:app --port "${2:-8000}"
+    ;;
+  docker)
+    docker compose up --build
+    ;;
+  help)
+    grep -E '^  [a-z]+\)' "$0" | sed 's/^  \([a-z]*\).*/\1/' | paste -sd ' ' -
+    echo "usage: do <command> [args]   (do help for commands: test, ingest, serve, docker, help)"
     ;;
   *)
-    echo "Usage: $0 {init|start|stop}"
+    echo "unknown command: $cmd (try: do help)" >&2
     exit 1
     ;;
 esac
