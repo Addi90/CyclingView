@@ -1,0 +1,64 @@
+"""API tests for the rides router (list, detail, streams, update, 404s)."""
+from __future__ import annotations
+
+import pytest
+
+from tests.backend.routers.conftest import ACTIVITY_ID, RIDE_SECONDS
+
+
+def test_rides_list_contains_seeded_ride(seeded) -> None:
+    res = seeded.get(f"/api/rides")
+    assert res.status_code == 200
+    assert "Morning Ride" in res.text
+
+
+def test_ride_detail(seeded) -> None:
+    res = seeded.get(f"/api/rides/{ACTIVITY_ID}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["name"] == "Morning Ride"
+    assert body["distance_m"] == pytest.approx(42_000.0)
+    assert body["avg_power"] == pytest.approx(250.0)
+
+
+def test_ride_detail_missing_is_404(seeded) -> None:
+    assert seeded.get("/api/rides/999").status_code == 404
+
+
+def _field_arrays(body: dict) -> dict:
+    """Field arrays live either under a `streams` key or at the top level."""
+    return body["streams"] if "streams" in body else body
+
+
+def test_ride_streams_downsampled(seeded) -> None:
+    res = seeded.get(
+        f"/api/rides/{ACTIVITY_ID}/streams",
+        params={"fields": "power,heart_rate", "n_points": 100},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["activity_id"] == ACTIVITY_ID
+    # t is relative to ride start; every field array aligns with it.
+    assert body["t"][0] == 0.0
+    assert len(body["t"]) <= 100
+    fields = _field_arrays(body)
+    for field in ("power", "heart_rate"):
+        assert len(fields[field]) == len(body["t"])
+    # Constant 250W / 150bpm in the fixture must survive downsampling.
+    assert fields["power"][0] == pytest.approx(250.0)
+    assert fields["heart_rate"][0] == pytest.approx(150.0)
+
+
+def test_update_ride(seeded) -> None:
+    res = seeded.patch(
+        f"/api/rides/{ACTIVITY_ID}",
+        json={"name": "Evening Ride", "description": "renamed"},
+    )
+    assert res.status_code == 200
+    detail = seeded.get(f"/api/rides/{ACTIVITY_ID}").json()
+    assert detail["name"] == "Evening Ride"
+    assert detail["description"] == "renamed"
+
+
+if __name__ == "__main__":
+    raise SystemExit(pytest.main([__file__, "-v"]))
