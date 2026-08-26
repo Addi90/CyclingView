@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.backend.routers.conftest import ACTIVITY_ID, RIDE_SECONDS
+from tests.backend.routers.conftest import ACTIVITY_ID
 
 
 def test_rides_list_contains_seeded_ride(seeded) -> None:

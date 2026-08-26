@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.services.streams import load_stream
 
 
 @pytest.fixture()
@@ -20,6 +21,9 @@ def data_dir(tmp_path, monkeypatch):
     # settings.data_dir is a plain attribute; the db_path / streams_dir
     # properties derive from it, so patching it redirects everything.
     monkeypatch.setattr(settings, "data_dir", d)
+    # load_stream is lru_cached on (activity_id, parquet_path) - a process-global
+    # cache that ignores data_dir. Clear it so no test sees another test's data.
+    load_stream.cache_clear()
     return d
 
 
