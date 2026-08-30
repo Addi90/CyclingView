@@ -14,7 +14,7 @@ case "$cmd" in
     "$PY" -m app.ingest "${2:?usage: do ingest <strava_export_dir>}"
     ;;
   serve)
-    exec "$PY" -m uvicorn app.main:app --port "${2:-8000}"
+    exec "$PY" -m uvicorn app.main:app --port "${2:-8080}"
     ;;
   docker)
     docker compose up --build
