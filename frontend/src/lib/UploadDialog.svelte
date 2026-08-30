@@ -390,4 +390,7 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .spin { animation: spin 1s linear infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .spin { animation: none; }
+  }
 </style>
