@@ -4,7 +4,7 @@ Local web app for exploring cycling data from any source (Strava, TCX, GPX, JSON
 
 - **Backend**: FastAPI + SQLite (metadata) + Parquet (per-ride streams)
 - **Frontend**: Svelte 5 (Vite + TypeScript) with synchronized uPlot charts and MapLibre GL maps
-- **Data sources**: Strava bulk export, individual activity files (TCX/GPX/JSON), or SQLite database import/export
+- **Data sources**: Strava bulk export, one or more activity files (TCX/GPX/JSON), or SQLite database import/export
 
 ## Quick start
 
@@ -16,7 +16,7 @@ pip install -e backend
 
 # 2. Ingest data (pick one)
 python -m app.ingest "path/to/strava/export"    # Strava bulk export
-# Or upload individual files via the UI at /import
+# Or upload one or more files via the UI
 
 # 3. Run API
 uvicorn app.main:app --reload --port 8000
@@ -37,7 +37,8 @@ docker compose up --build
 
 ## Features
 
-- **Multi-source ingestion** — Strava exports, individual TCX/GPX/JSON files, or full database import/export
+- **Multi-source ingestion** — Strava exports, TCX/GPX/JSON files, or full database import/export
+- **Multi-file upload** — Drag and drop multiple GPX/FIT/TCX files at once; edit each file's name and bike before uploading
 - **Bike management** — Track multiple bikes with per-bike stats and ride assignment
 - **Rich charts** — Synchronized time-series views (power, HR, speed, cadence, elevation, distance)
 - **Interactive route map** — Color-coded routes by metric with hover synchronization
