@@ -143,12 +143,15 @@
   }
   h3 { margin: 0; font-size: 14px; }
   .unit-toggle {
+    flex: none; /* don't shrink next to the h3 in narrow panels */
     display: inline-flex;
     border: 1px solid var(--border);
     border-radius: 999px;
     overflow: hidden;
   }
   .unit-toggle button {
+    flex: none; /* never shrink below content: "W/kg" used to clip */
+    white-space: nowrap;
     background: transparent;
     border: 0;
     color: var(--muted);
