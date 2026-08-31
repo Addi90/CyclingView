@@ -568,6 +568,7 @@
   .sheet-actions .danger { color: var(--hr); border-color: var(--hr); }
 
   @media (max-width: 768px) {
+    .back { display: none; } /* the Rides tab in the footer is the back path */
     .cards { grid-template-columns: repeat(2, 1fr); }
     .map-row.has-bests { grid-template-columns: 1fr; }
     .map-block :global(.map) { min-height: 280px; }

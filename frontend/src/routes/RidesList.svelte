@@ -240,9 +240,7 @@
     <button type="button" on:click={() => (filterOpen = true)}>
       <SlidersHorizontal size={16} /> {$t("rides.filter")}
     </button>
-    <button type="button" class="upload_action" on:click={() => (uploadOpen = true)}>
-      <Plus size={16} /> {$t("rides.upload")}
-    </button>
+    <!-- upload: footer + only on mobile (the toolbar copy below stays desktop) -->
   </div>
 
   {#if error}<div class="error">{error}</div>{/if}
@@ -351,7 +349,6 @@
     margin-bottom: 12px;
   }
   .toolbar .sort { width: 100%; }
-  .toolbar .upload_action { display: inline-flex; }
 
   .ride-cards {
     list-style: none;
