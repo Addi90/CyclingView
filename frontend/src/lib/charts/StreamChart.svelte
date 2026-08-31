@@ -88,7 +88,9 @@
           stroke: AXIS_TEXT,
           grid: { stroke: GRID, width: 1 },
           ticks: { stroke: TICK, width: 1 },
-          size: 55,
+          // No explicit size: uPlot auto-sizes the axis from the label text,
+          // so the plot area stretches toward the card edge instead of
+          // always reserving 55px.
         },
       ],
       series: [
@@ -261,6 +263,10 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 14px 14px;
+  }
+  @media (max-width: 768px) {
+    .chart-card { padding: 8px 6px 10px; }
+    .title { padding-bottom: 4px; }
   }
   .title {
     font-size: 13px;
