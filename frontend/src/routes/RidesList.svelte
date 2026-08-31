@@ -9,6 +9,7 @@
   import StatsPanel from "../lib/StatsPanel.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
   import BottomSheet from "../lib/BottomSheet.svelte";
+  import { uploadRequest } from "../lib/upload";
 
   let bikes: Bike[] = [];
   let rides: Ride[] = [];
@@ -20,6 +21,11 @@
   let error = "";
   let uploadOpen = false;
   let filterOpen = false;
+
+  // The mobile tab bar "plus" bumps this from App; opening the dialog here
+  // makes the request work from any screen (RideDetail navigates to the
+  // list first, and this also fires on the fresh mount).
+  $: if ($uploadRequest > 0) uploadOpen = true;
 
   const SORT_KEYS = {
     start_time: true, name: true, bike_name: true,

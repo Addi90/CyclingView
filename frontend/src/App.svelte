@@ -1,10 +1,11 @@
 <script lang="ts">
   import { Router, Route, Link, navigate } from "svelte-routing";
-  import { Settings as SettingsIcon, List } from "lucide-svelte";
+  import { Settings as SettingsIcon, List, Plus } from "lucide-svelte";
     import { Bike } from "lucide-svelte";
   import RidesList from "./routes/RidesList.svelte";
   import RideDetail from "./routes/RideDetail.svelte";
   import SettingsDialog from "./lib/SettingsDialog.svelte";
+  import { uploadRequest } from "./lib/upload";
   import { t } from "./lib/i18n";
 
   export let url = "";
@@ -34,10 +35,10 @@
     </Route>
     <Route path="/"><RidesList /></Route>
   </main>
-  <!-- Mobile bottom tab bar: the app has exactly two screens, so two tabs.
-       Rides doubles as the back escape hatch (no scroll-to-top needed);
-       Settings replaces the header cog, unreachable at the bottom of a
-       long ride page. Hidden ≥769px. -->
+  <!-- Mobile bottom tab bar: Rides | + (upload) | Settings. The app has
+       exactly two screens, so two tabs; the center + opens the upload dialog
+       from any screen. Rides doubles as the back escape hatch (no
+       scroll-to-top needed); Settings replaces the header cog. Hidden ≥769px. -->
   <nav class="tabbar" aria-label="Main navigation">
     <button
       type="button"
@@ -45,6 +46,18 @@
       on:click={() => navigate("/")}
     >
       <List size={20} /><span>{$t("rides.title")}</span>
+    </button>
+    <button
+      type="button"
+      class="plus"
+      aria-label={$t("rides.upload")}
+      title={$t("rides.upload")}
+      on:click={() => {
+        uploadRequest.update((n) => n + 1);
+        if (location.pathname.startsWith("/rides/")) navigate("/");
+      }}
+    >
+      <Plus size={26} />
     </button>
     <button type="button" on:click={() => (settingsOpen = true)}>
       <SettingsIcon size={20} /><span>{$t("settings.title")}</span>
@@ -91,9 +104,10 @@
 
   .tabbar { display: none; }
   @media (max-width: 768px) {
+    .cog { display: none; } /* settings lives in the tab bar */
     .tabbar {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr auto 1fr;
       position: fixed;
       left: 0;
       right: 0;
@@ -117,6 +131,17 @@
     }
     .tabbar button:active { opacity: 0.7; }
     .tabbar button.active { color: var(--accent); }
+    .tabbar .plus {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      align-self: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: var(--bg); /* dark on orange: white fails WCAG AA */
+    }
     /* Keep content clear of the fixed bar */
     main { padding: 16px 16px calc(76px + env(safe-area-inset-bottom)); }
   }
