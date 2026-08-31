@@ -113,7 +113,13 @@
             const idx = u.cursor.idx;
             if (idx == null) {
               hoverTime.set(null);
-              selectionRange.set(null);
+              // Mouse-leave also fires setCursor(idx=null) while the drag-select
+              // box is still shown — only clear the selection when uPlot itself
+              // has none (e.g. cleared by a click), or the reset pill + map zoom
+              // would vanish every time the pointer leaves the chart.
+              if (!u.select || u.select.width <= 0 || u.select.show === false) {
+                selectionRange.set(null);
+              }
             } else {
               const t = u.data[0][idx];
               hoverTime.set(typeof t === "number" ? t : null);
