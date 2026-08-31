@@ -113,13 +113,6 @@
             const idx = u.cursor.idx;
             if (idx == null) {
               hoverTime.set(null);
-              // Mouse-leave also fires setCursor(idx=null) while the drag-select
-              // box is still shown — only clear the selection when uPlot itself
-              // has none (e.g. cleared by a click), or the reset pill + map zoom
-              // would vanish every time the pointer leaves the chart.
-              if (!u.select || u.select.width <= 0 || u.select.show === false) {
-                selectionRange.set(null);
-              }
             } else {
               const t = u.data[0][idx];
               hoverTime.set(typeof t === "number" ? t : null);
@@ -129,8 +122,10 @@
         setSelect: [
           (u) => {
             const { left, width, show } = u.select;
+            // Zero-width is uPlot hiding its transient box (click, mouse-leave,
+            // dblclick) — NOT a zoom reset. selectionRange is our app-level zoom
+            // state: set here on drag, cleared only by the reset pill or dblclick.
             if (width <= 0 || show === false) {
-              selectionRange.set(null);
               return;
             }
             const t0 = u.posToVal(left, "x");
@@ -203,6 +198,7 @@
     // Drag-select also rescaled the x axis (uPlot built-in zoom) — setData with
     // resetScales=true restores the auto scale from the full data.
     plot?.setData(toData(), true);
+    selectionRange.set(null);
   }
 
   let _lastZones: typeof zones = null;
@@ -228,13 +224,20 @@
     ro = new ResizeObserver(() => resize());
     ro.observe(container);
     window.addEventListener("resize", resize);
-    container.addEventListener("mouseup", () => selectionRange.set(null));
+    // uPlot's native dblclick already runs autoScaleX() (zoom-out); mirror it
+    // for our zoom state so the reset pill + map zoom go away with it. (Also
+    // fires on touch double-tap.)
+    container.addEventListener("dblclick", onDblClick);
   });
+
+  function onDblClick() {
+    selectionRange.set(null);
+  }
 
   onDestroy(() => {
     window.removeEventListener("resize", resize);
     ro?.disconnect();
-    container?.removeEventListener("mouseup", () => selectionRange.set(null));
+    container?.removeEventListener("dblclick", onDblClick);
     plot?.destroy();
   });
 </script>
