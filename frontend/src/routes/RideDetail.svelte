@@ -218,12 +218,12 @@
   let activeField: FieldKey = "power";
   let resetSignal = 0;
   $: chartSpecs = [
-    { f: "elevation" as FieldKey, label: $t("ride.chart.elevation"), unit: "m", xs: ts, ys: altitude, valueDigits: 0, highQ: 0.005, zones: null },
+    { f: "elevation" as FieldKey, label: $t("ride.chart.elevation"), unit: "m", xs: ts, ys: altitude, valueDigits: 0, highQ: 0.995, zones: null },
     { f: "speed" as FieldKey, label: $t("ride.chart.speed"), unit: "km/h", xs: ts, ys: speedKmh, valueDigits: 1, highQ: 0.999, zones: null },
-    { f: "power" as FieldKey, label: $t("ride.card.power"), unit: "W", xs: ts, ys: power, valueDigits: 0, highQ: 0.005, zones: null },
-    { f: "hr" as FieldKey, label: $t("ride.card.hr"), unit: "bpm", xs: ts, ys: hr, valueDigits: 0, highQ: 0.005, zones: hrZoneBands },
-    { f: "cadence" as FieldKey, label: $t("ride.card.cadence"), unit: "rpm", xs: ts, ys: cadence, valueDigits: 0, highQ: 0.005, zones: null },
-    { f: "temperature" as FieldKey, label: $t("ride.card.temperature"), unit: "°C", xs: ts, ys: temperature, valueDigits: 1, highQ: 0.005, zones: null },
+    { f: "power" as FieldKey, label: $t("ride.card.power"), unit: "W", xs: ts, ys: power, valueDigits: 0, highQ: 0.995, zones: null },
+    { f: "hr" as FieldKey, label: $t("ride.card.hr"), unit: "bpm", xs: ts, ys: hr, valueDigits: 0, highQ: 0.995, zones: hrZoneBands },
+    { f: "cadence" as FieldKey, label: $t("ride.card.cadence"), unit: "rpm", xs: ts, ys: cadence, valueDigits: 0, highQ: 0.995, zones: null },
+    { f: "temperature" as FieldKey, label: $t("ride.card.temperature"), unit: "°C", xs: ts, ys: temperature, valueDigits: 1, highQ: 0.995, zones: null },
   ].filter((s) => hasAny(s.ys));
   $: if (chartSpecs.length && !chartSpecs.some((s) => s.f === activeField)) {
     // Guaranteed to find one: chartSpecs is non-empty and covers every FieldKey.
