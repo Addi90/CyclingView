@@ -48,18 +48,20 @@
   $: if (activityId !== undefined) load();
   $: if (reloadKey > 0) load();
 
-  function togglePowerUnit() {
-    settings.update((s) => ({ ...s, powerUnit: s.powerUnit === "W" ? "W/kg" : "W" }));
+  function setPowerUnit(unit: "W" | "W/kg") {
+    if ($settings.powerUnit === unit) return;
+    settings.update((s) => ({ ...s, powerUnit: unit }));
   }
 </script>
 
 <section class="bests">
   <header>
     <h3>{title}</h3>
-    <button type="button" class="unit" on:click={togglePowerUnit}
+    <div class="unit-toggle" role="group"
       title={$t("power.bests.unit_title").replace("{unit}", $settings.powerUnit).replace("{weight}", String($settings.weightKg))}>
-      {$settings.powerUnit}
-    </button>
+      <button type="button" class:active={$settings.powerUnit === "W/kg"} on:click={() => setPowerUnit("W/kg")}>W/kg</button>
+      <button type="button" class:active={$settings.powerUnit === "W"} on:click={() => setPowerUnit("W")}>W</button>
+    </div>
   </header>
 
   {#if error}
@@ -140,16 +142,26 @@
     margin-bottom: 6px;
   }
   h3 { margin: 0; font-size: 14px; }
-  .unit {
+  .unit-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .unit-toggle button {
     background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    border-radius: 6px;
-    padding: 2px 10px;
+    border: 0;
+    color: var(--muted);
+    padding: 3px 12px;
     font-size: 12px;
     cursor: pointer;
+    min-height: 26px;
   }
-  .unit:hover { background: rgba(252, 82, 0, 0.1); }
+  .unit-toggle button.active {
+    background: var(--accent);
+    color: var(--bg); /* dark on orange: white fails WCAG AA */
+    font-weight: 600;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
