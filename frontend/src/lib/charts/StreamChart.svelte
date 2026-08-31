@@ -16,6 +16,9 @@
   export let zones: { from: number; to: number; color: string }[] | null = null;
   export let lowQ = 0.005;
   export let highQ = 0.995;
+  /** Bump to clear any drag-to-select zoom (zero-size setSelect fires the setSelect
+   *  hook, which nulls selectionRange). uPlot 1.7+ would offer clearSelection(). */
+  export let resetSignal = 0;
 
   let container: HTMLDivElement;
   let plot: uPlot | null = null;
@@ -185,6 +188,15 @@
     if (!plot || !container) return;
     const w = container.clientWidth;
     if (w > 0) plot.setSize({ width: w, height });
+  }
+
+  let _rs = 0;
+  $: if (resetSignal !== _rs) {
+    _rs = resetSignal;
+    plot?.setSelect({ left: 0, top: 0, width: 0, height: 0 });
+    // Drag-select also rescaled the x axis (uPlot built-in zoom) — setData with
+    // resetScales=true restores the auto scale from the full data.
+    plot?.setData(toData(), true);
   }
 
   let _lastZones: typeof zones = null;

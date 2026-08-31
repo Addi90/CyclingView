@@ -462,7 +462,9 @@
   .actions { display: flex; justify-content: flex-end; margin-top: 18px; }
   .primary {
     background: var(--accent);
-    color: white;
+    /* Dark text on the orange: white fails WCAG AA (3.3:1). */
+    color: var(--bg);
+    font-weight: 600;
     border-color: var(--accent);
   }
   .primary:hover { filter: brightness(1.1); }

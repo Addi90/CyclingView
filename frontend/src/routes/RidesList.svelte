@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Link } from "svelte-routing";
-  import { Plus } from "lucide-svelte";
+  import { Plus, SlidersHorizontal } from "lucide-svelte";
   import { api, type Bike, type Ride } from "../lib/api";
   import { fmtKm, fmtKmh, fmtDuration, fmtNum, fmtDateShort } from "../lib/format";
   import { t } from "../lib/i18n";
   import UploadDialog from "../lib/UploadDialog.svelte";
   import StatsPanel from "../lib/StatsPanel.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
+  import BottomSheet from "../lib/BottomSheet.svelte";
 
   let bikes: Bike[] = [];
   let rides: Ride[] = [];
@@ -18,6 +19,26 @@
   let loading = false;
   let error = "";
   let uploadOpen = false;
+  let filterOpen = false;
+
+  const SORT_KEYS = {
+    start_time: true, name: true, bike_name: true,
+    distance_m: true, moving_s: true, avg_speed_ms: true,
+    avg_power: true, np_power: true, avg_hr: true, elevation_gain_m: true,
+  } as const;
+  // Mobile sort select value, e.g. "start_time:desc". Syncs with sortKey/sortDir
+  // (the desktop th-sorters update it in turn).
+  $: sortSel = `${sortKey}:${sortDir}`;
+  function applySortSel() {
+    const [k, d] = sortSel.split(":");
+    if (k in SORT_KEYS && (d === "asc" || d === "desc")) {
+      sortKey = k as SortKey;
+      sortDir = d as "asc" | "desc";
+    }
+  }
+  // Bumped after each upload: StatsPanel/PowerBestsTable watch `reloadKey`
+  // and re-fetch (they otherwise only load once per page load).
+  let refreshKey = 0;
 
   type SortKey =
     | "start_time" | "name" | "bike_name"
@@ -82,6 +103,7 @@
   });
 
   async function onUploaded() {
+    refreshKey++;
     await load();
   }
 </script>
@@ -111,10 +133,10 @@
       <Plus size={16} /> {$t("rides.upload")}
     </button>
     <hr />
-    <StatsPanel />
+    <StatsPanel reloadKey={refreshKey} />
 
     <hr />
-    <PowerBestsTable activityId={null} compact={true} />
+    <PowerBestsTable activityId={null} compact={true} reloadKey={refreshKey} />
 
     <hr />
 
@@ -191,6 +213,103 @@
   </section>
 </div>
 
+<!-- Mobile (≤768px): card list instead of the wide table. -->
+<div class="mobile-only">
+  <div class="toolbar">
+    <select
+      class="sort"
+      aria-label={$t("rides.sort")}
+      bind:value={sortSel}
+      on:change={applySortSel}
+    >
+      <option value="start_time:desc">{$t("rides.sort.newest")}</option>
+      <option value="start_time:asc">{$t("rides.sort.oldest")}</option>
+      <option value="distance_m:desc">{$t("rides.sort.distance")}</option>
+      <option value="moving_s:desc">{$t("rides.sort.duration")}</option>
+      <option value="avg_speed_ms:desc">{$t("rides.sort.speed")}</option>
+      <option value="avg_power:desc">{$t("rides.sort.power")}</option>
+      <option value="avg_hr:desc">{$t("rides.sort.hr")}</option>
+      <option value="elevation_gain_m:desc">{$t("rides.sort.elevation")}</option>
+    </select>
+    <button type="button" on:click={() => (filterOpen = true)}>
+      <SlidersHorizontal size={16} /> {$t("rides.filter")}
+    </button>
+    <button type="button" class="upload_action" on:click={() => (uploadOpen = true)}>
+      <Plus size={16} /> {$t("rides.upload")}
+    </button>
+  </div>
+
+  {#if error}<div class="error">{error}</div>{/if}
+  {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
+
+  <ul class="ride-cards">
+    {#each sortedRides as r}
+      <li>
+        <Link to={`/rides/${r.id}`} class="ride-card">
+          <div class="rc-top">
+            <span class="rc-name">{r.name ?? "–"}</span>
+            <span class="rc-date">{fmtDateShort(r.start_time)}</span>
+          </div>
+          <div class="rc-sub">
+            {#if r.bike_name}<span>{r.bike_name}</span>{/if}
+            <span>{fmtKm(r.distance_m)}</span>
+            <span>{fmtDuration(r.moving_s ?? r.elapsed_s)}</span>
+            {#if r.avg_power != null}
+              <span>
+                {fmtNum(r.avg_power, 0, " W")}
+                {#if r.estimated_power}
+                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {/if}
+              </span>
+            {/if}
+          </div>
+        </Link>
+      </li>
+    {/each}
+  </ul>
+
+  <details class="msection">
+    <summary>{$t("stats.alltime")}</summary>
+    <StatsPanel reloadKey={refreshKey} />
+  </details>
+  <details class="msection">
+    <summary>{$t("power.bests.short")}</summary>
+    <PowerBestsTable activityId={null} compact={true} reloadKey={refreshKey} />
+  </details>
+</div>
+
+<BottomSheet bind:open={filterOpen} title={$t("rides.filter")}>
+  <div class="sheet-fields">
+    <label>
+      {$t("rides.filter.bike")}
+      <select bind:value={bikeFilter}>
+        <option value="">{$t("rides.filter.all")}</option>
+        {#each bikes as b}
+          <option value={b.id}>{b.name}</option>
+        {/each}
+      </select>
+    </label>
+    <label>
+      {$t("rides.filter.from")}
+      <input type="date" bind:value={dateFrom} />
+    </label>
+    <label>
+      {$t("rides.filter.to")}
+      <input type="date" bind:value={dateTo} />
+    </label>
+    <button
+      type="button"
+      class="sheet-apply"
+      on:click={() => {
+        filterOpen = false;
+        load();
+      }}
+    >
+      {$t("rides.filter.apply")}
+    </button>
+  </div>
+</BottomSheet>
+
 <UploadDialog bind:open={uploadOpen} {bikes} on:uploaded={onUploaded} />
 
 <style>
@@ -212,43 +331,89 @@
     overflow-y: auto;
   }
 
-  @media (max-width: 800px) {
-    .layout {
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-    aside {
-      order: 1;
-      position: static;
-      max-height: none;
-      width: 100%;
-      margin-bottom: 8px;
-    }
-    section {
-      order: 2;
-      width: 100%;
-      overflow: hidden;
-    }
-    table.rides {
-      min-width: 400px;
-    }
-    table.rides th, table.rides td {
-      padding: 10px 8px;
-    }
-    table.rides .col-date { width: 85px; }
-    table.rides .col-dist { width: 55px; }
-    .col-name {
-      max-width: 90px;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-    /* Hide less critical columns on small screens to fit Date, Name, Distance */
-    .col-bike, .col-speed, .col-np, .col-hr, .col-elev {
-      display: none;
-    }
-    table.rides .col-name {
-      white-space: normal ;
-    }
+  /* Mobile view swap: table layout hidden, card list shown (no JS media query). */
+  .mobile-only { display: none; }
+  @media (max-width: 768px) {
+    .layout { display: none; }
+    .mobile-only { display: block; }
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: minmax(110px, 1.1fr) auto 1.4fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .toolbar .sort { width: 100%; }
+  .toolbar .upload_action { display: inline-flex; }
+
+  .ride-cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ride-card {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    min-height: var(--touch);
+  }
+  .ride-card:active { background: var(--panel-2); }
+  .rc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .rc-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rc-date { color: var(--muted); font-size: 13px; flex-shrink: 0; }
+  .rc-sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .msection {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 0 14px 12px;
+  }
+  .msection summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    min-height: var(--touch);
+    display: flex;
+    align-items: center;
+    user-select: none;
+  }
+
+  .sheet-fields { display: grid; gap: 12px; }
+  .sheet-fields label { display: block; font-size: 13px; color: var(--muted); }
+  .sheet-fields select, .sheet-fields input { width: 100%; margin-top: 4px; }
+  .sheet-apply {
+    background: var(--accent);
+    border-color: var(--accent);
+    /* Dark text on the orange: white would fail WCAG AA (3.3:1). */
+    color: var(--bg);
+    font-weight: 600;
   }
 
   section {
@@ -324,5 +489,5 @@
   table.rides th.active { color: var(--accent); }
   table.rides th.num, table.rides td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); font-size: 13px; }
-  .error { color: #ef4444; padding: 8px; border: 1px solid #ef4444; border-radius: 6px; margin-bottom: 12px; }
+  .error { color: var(--hr); padding: 8px; border: 1px solid var(--hr); border-radius: 6px; margin-bottom: 12px; }
 </style>

@@ -11,6 +11,8 @@
   export let activityId: number | string | null = null;
   /** Compact mode hides the "Fahrt" column and truncates dates. */
   export let compact = false;
+  /** Bump to force a re-fetch (e.g. after a ride upload). 0 = initial mount only. */
+  export let reloadKey = 0;
 
   $: title = activityId ? $t("power.bests.mean_max") : $t("power.bests.all_time");
 
@@ -44,6 +46,7 @@
 
   onMount(load);
   $: if (activityId !== undefined) load();
+  $: if (reloadKey > 0) load();
 
   function togglePowerUnit() {
     settings.update((s) => ({ ...s, powerUnit: s.powerUnit === "W" ? "W/kg" : "W" }));

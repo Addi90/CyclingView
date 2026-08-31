@@ -7,14 +7,19 @@
 
   let stats: OverallStats | null = null;
   let error = "";
+  /** Bump to force a re-fetch (e.g. after a ride upload). 0 = initial mount only. */
+  export let reloadKey = 0;
 
-  onMount(async () => {
+  async function load() {
     try {
       stats = await api.stats();
     } catch (e: any) {
       error = e?.message ?? String(e);
     }
-  });
+  }
+
+  onMount(load);
+  $: if (reloadKey > 0) load();
 </script>
 
 {#if error}

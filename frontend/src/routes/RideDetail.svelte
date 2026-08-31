@@ -8,7 +8,8 @@
   import StreamChart from "../lib/charts/StreamChart.svelte";
   import RouteMap from "../lib/RouteMap.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
-  import { hoverTime } from "../lib/hover";
+  import BottomSheet from "../lib/BottomSheet.svelte";
+  import { hoverTime, selectionRange } from "../lib/hover";
   import {
     settings,
     applyStreamFilter,
@@ -65,9 +66,15 @@
     }
   }
 
-  async function deleteRide() {
+  // Delete confirm via bottom sheet (native confirm() renders as a broken
+  // blocking alert on iOS Safari).
+  let confirmOpen = false;
+  function deleteRide() {
+    if (ride) confirmOpen = true;
+  }
+  async function doDelete() {
+    confirmOpen = false;
     if (!ride) return;
-    if (!confirm($t("ride.delete_confirm").replace("{name}", String(ride.name ?? ride.id)))) return;
     try {
       await api.deleteRide(ride.id);
       navigate("/", { replace: true });
@@ -206,6 +213,29 @@
     return arr.some((v) => v != null);
   }
 
+  // Charts: pill switcher raises the selected chart; primary is bigger.
+  type FieldKey = "elevation" | "speed" | "power" | "hr" | "cadence" | "temperature";
+  let activeField: FieldKey = "power";
+  let resetSignal = 0;
+  $: chartSpecs = [
+    { f: "elevation" as FieldKey, label: $t("ride.chart.elevation"), unit: "m", xs: ts, ys: altitude, valueDigits: 0, highQ: 0.005, zones: null },
+    { f: "speed" as FieldKey, label: $t("ride.chart.speed"), unit: "km/h", xs: ts, ys: speedKmh, valueDigits: 1, highQ: 0.999, zones: null },
+    { f: "power" as FieldKey, label: $t("ride.card.power"), unit: "W", xs: ts, ys: power, valueDigits: 0, highQ: 0.005, zones: null },
+    { f: "hr" as FieldKey, label: $t("ride.card.hr"), unit: "bpm", xs: ts, ys: hr, valueDigits: 0, highQ: 0.005, zones: hrZoneBands },
+    { f: "cadence" as FieldKey, label: $t("ride.card.cadence"), unit: "rpm", xs: ts, ys: cadence, valueDigits: 0, highQ: 0.005, zones: null },
+    { f: "temperature" as FieldKey, label: $t("ride.card.temperature"), unit: "°C", xs: ts, ys: temperature, valueDigits: 1, highQ: 0.005, zones: null },
+  ].filter((s) => hasAny(s.ys));
+  $: if (chartSpecs.length && !chartSpecs.some((s) => s.f === activeField)) {
+    // Guaranteed to find one: chartSpecs is non-empty and covers every FieldKey.
+    activeField =
+      (["power", "hr", "speed", "elevation", "cadence", "temperature"] as FieldKey[])
+        .find((f) => chartSpecs.some((s) => s.f === f))!;
+  }
+  // Primary first (stable for the rest); pills stay in natural order.
+  $: renderSpecs = [...chartSpecs].sort(
+    (a, b) => Number(b.f === activeField) - Number(a.f === activeField)
+  );
+
   /** Find the index in `ts` whose value is closest to `t`. */
   function nearestIndex(tsArr: number[], targetT: number): number {
     if (tsArr.length === 0) return -1;
@@ -236,7 +266,7 @@
   $: hoverZoneIdx = getZoneIdx(hoverHR);
 </script>
 
-<a href="/" on:click|preventDefault={() => history.back()}>{$t("ride.back")}</a>
+<a href="/" class="back" on:click|preventDefault={() => history.back()}>{$t("ride.back")}</a>
 
 {#if error}<div class="error">{error}</div>{/if}
 
@@ -367,42 +397,60 @@
   </section>
 
   {#if streams}
+    {#if chartSpecs.length}
+      <div class="chart-controls">
+        <div class="pills">
+          {#each chartSpecs as s}
+            <button
+              type="button"
+              class="pill"
+              class:active={s.f === activeField}
+              on:click={() => (activeField = s.f)}
+            >
+              {s.label}
+            </button>
+          {/each}
+        </div>
+        {#if $selectionRange != null}
+          <button type="button" class="pill reset" on:click={() => resetSignal++}>
+            {$t("ride.reset_zoom")}
+          </button>
+        {/if}
+      </div>
+    {/if}
     <div class="charts">
-      {#if hasAny(altitude)}
-        <StreamChart label={$t("ride.chart.elevation")} unit="m" color="#fc5200" xs={ts} ys={altitude} {syncKey} />
-      {/if}
-      {#if hasAny(speedKmh)}
-        <StreamChart label={$t("ride.chart.speed")} unit="km/h" color="#fc5200" xs={ts} ys={speedKmh} {syncKey} valueDigits={1} highQ={0.999} />
-      {/if}
-      {#if hasAny(power)}
-        <StreamChart label={$t("ride.card.power")} unit="W" color="#fc5200" xs={ts} ys={power} {syncKey} />
-      {/if}
-      {#if hasAny(hr)}
-        <StreamChart label={$t("ride.card.hr")} unit="bpm" color="#fc5200" xs={ts} ys={hr} {syncKey} zones={hrZoneBands}>
-          <div slot="title-right" class="hr-legend">
-            {#if hrZones}
-              {#each hrZones as z, i}
-                <div 
-                  class="zone-pill" 
-                  class:active={hoverZoneIdx === i}
-                  style:--color={z.color}
-                  title={`${z.label}: ${z.fromBpm}-${z.toBpm} bpm`}
-                >
-                  {#if hoverZoneIdx === i}
-                    <span class="zone-label">{z.label}</span>
-                  {/if}
-                </div>
-              {/each}
-            {/if}
-          </div>
-        </StreamChart>
-      {/if}
-      {#if hasAny(cadence)}
-        <StreamChart label={$t("ride.card.cadence")} unit="rpm" color="#fc5200" xs={ts} ys={cadence} {syncKey} />
-      {/if}
-      {#if hasAny(temperature)}
-        <StreamChart label={$t("ride.card.temperature")} unit="°C" color="#fc5200" xs={ts} ys={temperature} {syncKey} valueDigits={1} />
-      {/if}
+      {#each renderSpecs as s}
+        {@const primary = s.f === activeField}
+        {#if s.f === "hr"}
+          <StreamChart
+            label={s.label} unit={s.unit} color="#fc5200" xs={s.xs} ys={s.ys}
+            {syncKey} zones={s.zones} height={primary ? 240 : 180} {resetSignal}
+          >
+            <div slot="title-right" class="hr-legend">
+              {#if hrZones}
+                {#each hrZones as z, i}
+                  <div
+                    class="zone-pill"
+                    class:active={hoverZoneIdx === i}
+                    style:--color={z.color}
+                    title={`${z.label}: ${z.fromBpm}-${z.toBpm} bpm`}
+                  >
+                    {#if hoverZoneIdx === i}
+                      <span class="zone-label">{z.label}</span>
+                    {/if}
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          </StreamChart>
+        {:else}
+          <StreamChart
+            label={s.label} unit={s.unit} color="#fc5200" xs={s.xs} ys={s.ys}
+            {syncKey} valueDigits={s.valueDigits} highQ={s.highQ}
+            height={primary ? 240 : 180} {resetSignal}
+          />
+        {/if}
+      {/each}
     </div>
   {/if}
 
@@ -420,6 +468,18 @@
 {:else if !error}
   <p class="muted">{$t("common.loading")}</p>
 {/if}
+
+<BottomSheet bind:open={confirmOpen} title={$t("ride.delete")} danger>
+  <div class="confirm-sheet">
+    <p class="confirm-text">
+      {$t("ride.delete_confirm").replace("{name}", String(ride?.name ?? ride?.id))}
+    </p>
+    <div class="sheet-actions">
+      <button type="button" on:click={() => (confirmOpen = false)}>{$t("ride.cancel")}</button>
+      <button type="button" class="danger" on:click={doDelete}>{$t("ride.delete")}</button>
+    </div>
+  </div>
+</BottomSheet>
 
 <style>
   .ride-header { margin-top: 12px; }
@@ -480,6 +540,51 @@
     border-left: 3px solid var(--zone-color);
   }
   .charts { display: flex; flex-direction: column; gap: 18px; margin-top: 24px; }
+
+  .back { display: inline-flex; align-items: center; min-height: var(--touch); }
+  .chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    min-height: 36px;
+  }
+  .pill.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; } /* dark on orange: white fails WCAG AA */
+  .pill.reset { margin-left: auto; color: var(--text); }
+  .confirm-sheet { display: grid; gap: 12px; }
+  .confirm-text { margin: 0; font-size: 14px; }
+  .sheet-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .sheet-actions .danger { color: var(--hr); border-color: var(--hr); }
+
+  @media (max-width: 768px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+    .map-row.has-bests { grid-template-columns: 1fr; }
+    .map-block :global(.map) { min-height: 280px; }
+    /* Zone cards: horizontal scroll-snap row */
+    .zone-cards {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      gap: 8px;
+      margin: 16px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .zone-card { min-width: 140px; flex-shrink: 0; scroll-snap-align: start; }
+    .charts { gap: 12px; margin-top: 16px; }
+    .chart-controls { margin-top: 16px; }
+    .pill { min-height: var(--touch); font-size: 14px; }
+  }
 
   .hr-legend {
     display: flex;
