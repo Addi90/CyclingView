@@ -19,6 +19,9 @@ data/
 .env
 .env.local
 
+# do start/stop runtime (pid files + logs)
+.do/
+
 # OS / editor
 .DS_Store
 .idea/

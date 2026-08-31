@@ -19,7 +19,7 @@ python -m app.ingest "path/to/strava/export"    # Strava bulk export
 # Or upload one or more files via the UI
 
 # 3. Run API
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8080
 
 # 4. Frontend (separate terminal)
 cd frontend
@@ -32,7 +32,7 @@ Or with Docker:
 ```bash
 docker compose up --build
 # UI:  http://localhost:8080
-# API: http://localhost:8000
+# API: http://localhost:8081
 ```
 
 ## Features
@@ -51,7 +51,7 @@ docker compose up --build
 ```bash
 do help              # list commands
 do test              # run the backend test suite (tests/backend/, pytest)
-do serve [port]      # start the API (default port 8000)
+do serve [port]      # start the API (default port 8080)
 do ingest <export>   # ingest a Strava bulk export
 do docker            # docker compose up --build
 ```

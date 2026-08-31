@@ -10,7 +10,9 @@ services:
     environment:
       CV_DATA_DIR: /app/data
     ports:
-      - "8000:8000"
+      # backend listens on 8080 in-container (see backend.Dockerfile);
+      # publish on host 8081 — 8080 is the frontend UI port
+      - "8081:8080"
 
   frontend:
     build:
