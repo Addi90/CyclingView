@@ -128,12 +128,18 @@
     }
   }
 
+  // Snap bounds to the step grid so the knobs land on clean values
+  // (e.g. 0.00 / 0.25 / 0.50 h instead of 0.01 / 0.26 / 0.51 h).
+  function snapBounds(min: number, max: number, step: number): [number, number] {
+    return [Math.floor(min / step) * step, Math.ceil(max / step) * step];
+  }
+
   onMount(async () => {
     bikes = await api.bikes();
     await load();
     const b = await api.rideBounds();
-    if (b.distance_m) distDomain = [b.distance_m[0] / 1000, b.distance_m[1] / 1000];
-    if (b.moving_s) durDomain = [b.moving_s[0] / 3600, b.moving_s[1] / 3600];
+    if (b.distance_m) distDomain = snapBounds(b.distance_m[0] / 1000, b.distance_m[1] / 1000, 1);
+    if (b.moving_s) durDomain = snapBounds(b.moving_s[0] / 3600, b.moving_s[1] / 3600, 0.25);
   });
 
   async function onUploaded() {

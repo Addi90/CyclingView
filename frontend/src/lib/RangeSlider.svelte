@@ -84,10 +84,13 @@
     z-index: 2;
   }
   .rs-top { z-index: 3; }
+  /* Browsers clamp the thumb inside the input box, so the visible track is
+     inset by half the thumb width (18px desktop / 22px mobile) to keep the
+     end knobs aligned with the track ends. */
   .rs-track {
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 9px;
+    right: 9px;
     top: 50%;
     transform: translateY(-50%);
     height: 4px;
@@ -126,12 +129,15 @@
   .rs-vals {
     display: flex;
     justify-content: space-between;
+    padding: 0 9px;
     font-size: 12px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   @media (max-width: 768px) {
     .rs { height: 44px; } /* thumb + hit area sized for touch */
+    .rs-track { left: 11px; right: 11px; }
+    .rs-vals { padding: 0 11px; }
     .rs-range::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9px; }
     .rs-range::-moz-range-thumb { width: 18px; height: 18px; }
   }
