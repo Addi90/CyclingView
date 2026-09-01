@@ -226,21 +226,20 @@
 
   <section>
     {#if error}<div class="error">{error}</div>{/if}
-    {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
     <div class="listbar">
+      <div class="pager">
+        {#if totalPages > 1}
+          <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+          <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+          <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+        {/if}
+      </div>
       <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
         <option value={25}>25</option>
         <option value={50}>50</option>
         <option value={100}>100</option>
         <option value={0}>{$t("rides.filter.all")}</option>
       </select>
-      {#if totalPages > 1}
-        <div class="pager">
-          <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
-          <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
-          <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
-        </div>
-      {/if}
     </div>
     <div class="table-container">
       <table class="rides">
@@ -313,12 +312,6 @@
 <!-- Mobile (≤768px): card list instead of the wide table. -->
 <div class="mobile-only">
   <div class="toolbar">
-    <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
-      <option value={25}>25</option>
-      <option value={50}>50</option>
-      <option value={100}>100</option>
-      <option value={0}>{$t("rides.filter.all")}</option>
-    </select>
     <select
       class="sort"
       aria-label={$t("rides.sort")}
@@ -337,14 +330,19 @@
     <button type="button" on:click={() => (filterOpen = true)}>
       <SlidersHorizontal size={16} /> {$t("rides.filter")}
     </button>
+    <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
+      <option value={25}>25</option>
+      <option value={50}>50</option>
+      <option value={100}>100</option>
+      <option value={0}>{$t("rides.filter.all")}</option>
+    </select>
     <!-- upload: footer + only on mobile (the toolbar copy below stays desktop) -->
   </div>
 
   {#if error}<div class="error">{error}</div>{/if}
-  {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
 
   {#if totalPages > 1}
-    <div class="pager">
+    <div class="pager full">
       <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
       <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
       <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
@@ -377,6 +375,14 @@
     {/each}
   </ul>
 
+  {#if totalPages > 1}
+    <div class="pager full">
+      <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+      <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+      <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+    </div>
+  {/if}
+
   <details class="msection">
     <summary>{$t("stats.alltime")}</summary>
     <StatsPanel reloadKey={refreshKey} />
@@ -386,6 +392,12 @@
     <PowerBestsTable activityId={null} compact={true} reloadKey={refreshKey} />
   </details>
 </div>
+
+{#if loading}
+  <div class="loading-overlay" role="status" aria-label={$t("common.loading")}>
+    <div class="spinner" aria-hidden="true"></div>
+  </div>
+{/if}
 
 <BottomSheet bind:open={filterOpen} title={$t("rides.filter")}>
   <div class="sheet-fields">
@@ -479,7 +491,7 @@
 
   .toolbar {
     display: grid;
-    grid-template-columns: 70px minmax(110px, 1.1fr) auto 1.4fr;
+    grid-template-columns: minmax(110px, 1.1fr) auto 70px;
     gap: 8px;
     margin-bottom: 12px;
   }
@@ -488,6 +500,35 @@
   .listbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
   .listbar select { width: 70px; }
   .pager { display: flex; align-items: center; gap: 8px; }
+  .pager.full { margin: 12px 0; }
+  .pager.full button { flex: 1; }
+  .pager.full button:first-child { text-align: left; }
+  .pager.full button:last-child { text-align: right; }
+  .pager.full .muted { flex: 1; text-align: center; }
+
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg) 45%, transparent);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation: none; }
+  }
 
   .ride-cards {
     list-style: none;
