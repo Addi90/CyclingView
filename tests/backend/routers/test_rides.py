@@ -12,6 +12,26 @@ def test_rides_list_contains_seeded_ride(seeded) -> None:
     assert "Morning Ride" in res.text
 
 
+def test_rides_filter_by_distance_and_duration(seeded) -> None:
+    # Seeded ride: 42 km, 5200 s (~1.44 h) moving.
+    res = seeded.get("/api/rides?min_km=40&max_km=50&min_hours=1&max_hours=2")
+    assert res.status_code == 200
+    assert res.json()["total"] == 1
+    # Out of range on either dimension excludes it.
+    assert seeded.get("/api/rides?min_km=50").json()["total"] == 0
+    assert seeded.get("/api/rides?max_km=40").json()["total"] == 0
+    assert seeded.get("/api/rides?min_hours=2").json()["total"] == 0
+    assert seeded.get("/api/rides?max_hours=1").json()["total"] == 0
+
+
+def test_rides_bounds(seeded) -> None:
+    res = seeded.get("/api/rides/bounds")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["distance_m"] == pytest.approx([42_000.0, 42_000.0])
+    assert body["moving_s"] == pytest.approx([5_200.0, 5_200.0])
+
+
 def test_ride_detail(seeded) -> None:
     res = seeded.get(f"/api/rides/{ACTIVITY_ID}")
     assert res.status_code == 200

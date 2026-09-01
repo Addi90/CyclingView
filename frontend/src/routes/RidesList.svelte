@@ -9,6 +9,7 @@
   import StatsPanel from "../lib/StatsPanel.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
   import BottomSheet from "../lib/BottomSheet.svelte";
+  import RangeSlider from "../lib/RangeSlider.svelte";
   import { uploadRequest } from "../lib/upload";
 
   let bikes: Bike[] = [];
@@ -17,6 +18,25 @@
   let bikeFilter: number | "" = "";
   let dateFrom = "";
   let dateTo = "";
+  // Slider domains are the DB min/max (km / h); lo/hi are the knob positions.
+  let distDomain: [number, number] | null = null;
+  let durDomain: [number, number] | null = null;
+  let distLo = 0;
+  let distHi = 0;
+  let durLo = 0;
+  let durHi = 0;
+  let distInit = false;
+  let durInit = false;
+  $: if (distDomain && !distInit) {
+    distLo = distDomain[0];
+    distHi = distDomain[1];
+    distInit = true;
+  }
+  $: if (durDomain && !durInit) {
+    durLo = durDomain[0];
+    durHi = durDomain[1];
+    durInit = true;
+  }
   let loading = false;
   let error = "";
   let uploadOpen = false;
@@ -92,6 +112,11 @@
         bike_id: bikeFilter === "" ? undefined : Number(bikeFilter),
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        // Knob at the domain edge = unbounded.
+        min_km: distDomain && distLo > distDomain[0] ? distLo : undefined,
+        max_km: distDomain && distHi < distDomain[1] ? distHi : undefined,
+        min_hours: durDomain && durLo > durDomain[0] ? durLo : undefined,
+        max_hours: durDomain && durHi < durDomain[1] ? durHi : undefined,
         limit: 500,
       });
       rides = res.items;
@@ -106,6 +131,9 @@
   onMount(async () => {
     bikes = await api.bikes();
     await load();
+    const b = await api.rideBounds();
+    if (b.distance_m) distDomain = [b.distance_m[0] / 1000, b.distance_m[1] / 1000];
+    if (b.moving_s) durDomain = [b.moving_s[0] / 3600, b.moving_s[1] / 3600];
   });
 
   async function onUploaded() {
@@ -134,6 +162,38 @@
       {$t("rides.filter.to")}
       <input type="date" bind:value={dateTo} on:change={load} />
     </label>
+    {#if distDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dist")}</span>
+        <RangeSlider
+          min={distDomain[0]}
+          max={distDomain[1]}
+          step={1}
+          bind:lo={distLo}
+          bind:hi={distHi}
+          unit="km"
+          decimals={1}
+          ariaLabel={$t("rides.filter.dist")}
+          on:change={load}
+        />
+      </div>
+    {/if}
+    {#if durDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dur")}</span>
+        <RangeSlider
+          min={durDomain[0]}
+          max={durDomain[1]}
+          step={0.25}
+          bind:lo={durLo}
+          bind:hi={durHi}
+          unit="h"
+          decimals={2}
+          ariaLabel={$t("rides.filter.dur")}
+          on:change={load}
+        />
+      </div>
+    {/if}
     <p class="muted">{$t("rides.filter.count").replace("{count}", String(total))}</p>
     <button type="button" class="upload_action" on:click={() => (uploadOpen = true)}>
       <Plus size={16} /> {$t("rides.upload")}
@@ -301,6 +361,36 @@
       {$t("rides.filter.to")}
       <input type="date" bind:value={dateTo} />
     </label>
+    {#if distDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dist")}</span>
+        <RangeSlider
+          min={distDomain[0]}
+          max={distDomain[1]}
+          step={1}
+          bind:lo={distLo}
+          bind:hi={distHi}
+          unit="km"
+          decimals={1}
+          ariaLabel={$t("rides.filter.dist")}
+        />
+      </div>
+    {/if}
+    {#if durDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dur")}</span>
+        <RangeSlider
+          min={durDomain[0]}
+          max={durDomain[1]}
+          step={0.25}
+          bind:lo={durLo}
+          bind:hi={durHi}
+          unit="h"
+          decimals={2}
+          ariaLabel={$t("rides.filter.dur")}
+        />
+      </div>
+    {/if}
     <button
       type="button"
       class="sheet-apply"
@@ -409,7 +499,7 @@
   }
 
   .sheet-fields { display: grid; gap: 12px; }
-  .sheet-fields label { display: block; font-size: 13px; color: var(--muted); }
+  .sheet-fields label, .sheet-fields .filter-label { display: block; font-size: 13px; color: var(--muted); }
   .sheet-fields select, .sheet-fields input { width: 100%; margin-top: 4px; }
   .sheet-apply {
     background: var(--accent);
@@ -459,7 +549,7 @@
   table.rides tr:last-child td { border-bottom: none; }
 
   aside h3 { margin-top: 0; }
-  aside label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+  aside label, aside .filter-label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
   aside select, aside input { display: block; margin-top: 4px; width: 100%; }
   aside hr { border: none; border-top: 1px solid var(--border); margin: 16px 0 12px; }
   .action { width: 100%; margin-bottom: 8px; text-align: left; }

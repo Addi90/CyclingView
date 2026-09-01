@@ -145,6 +145,10 @@ export const api = {
     bike_id?: number;
     date_from?: string;
     date_to?: string;
+    min_km?: number;
+    max_km?: number;
+    min_hours?: number;
+    max_hours?: number;
     limit?: number;
     offset?: number;
   } = {}) => {
@@ -156,6 +160,8 @@ export const api = {
     return get<RidesPage>(`/rides${s ? `?${s}` : ""}`);
   },
   ride: (id: number | string) => get<Ride>(`/rides/${id}`),
+  rideBounds: () =>
+    get<{ distance_m: [number, number] | null; moving_s: [number, number] | null }>("/rides/bounds"),
 
   updateRide: async (
     id: number | string,
