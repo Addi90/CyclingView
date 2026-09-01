@@ -15,6 +15,9 @@
   let bikes: Bike[] = [];
   let rides: Ride[] = [];
   let total = 0;
+  let perPage = 25; // 0 = all on one page
+  let page = 1;
+  $: totalPages = perPage > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
   let bikeFilter: number | "" = "";
   let dateFrom = "";
   let dateTo = "";
@@ -117,7 +120,8 @@
         max_km: distDomain && distHi < distDomain[1] ? distHi : undefined,
         min_hours: durDomain && durLo > durDomain[0] ? durLo : undefined,
         max_hours: durDomain && durHi < durDomain[1] ? durHi : undefined,
-        limit: 500,
+        limit: perPage,
+        offset: perPage > 0 ? (page - 1) * perPage : 0,
       });
       rides = res.items;
       total = res.total;
@@ -142,9 +146,15 @@
     if (b.moving_s) durDomain = snapBounds(b.moving_s[0] / 3600, b.moving_s[1] / 3600, 0.25);
   });
 
+  // Filter / page-size changes go back to the first page.
+  function reload() {
+    page = 1;
+    load();
+  }
+
   async function onUploaded() {
     refreshKey++;
-    await load();
+    await reload();
   }
 </script>
 
@@ -153,7 +163,7 @@
     <h3>{$t("rides.filter")}</h3>
     <label>
       {$t("rides.filter.bike")}
-      <select bind:value={bikeFilter} on:change={load}>
+      <select bind:value={bikeFilter} on:change={reload}>
         <option value="">{$t("rides.filter.all")}</option>
         {#each bikes as b}
           <option value={b.id}>{b.name}</option>
@@ -162,11 +172,11 @@
     </label>
     <label>
       {$t("rides.filter.from")}
-      <input type="date" bind:value={dateFrom} on:change={load} />
+      <input type="date" bind:value={dateFrom} on:change={reload} />
     </label>
     <label>
       {$t("rides.filter.to")}
-      <input type="date" bind:value={dateTo} on:change={load} />
+      <input type="date" bind:value={dateTo} on:change={reload} />
     </label>
     {#if distDomain}
       <div class="filter-label">
@@ -180,7 +190,7 @@
           unit="km"
           decimals={1}
           ariaLabel={$t("rides.filter.dist")}
-          on:change={load}
+          on:change={reload}
         />
       </div>
     {/if}
@@ -196,7 +206,7 @@
           unit="h"
           decimals={2}
           ariaLabel={$t("rides.filter.dur")}
-          on:change={load}
+          on:change={reload}
         />
       </div>
     {/if}
@@ -217,6 +227,21 @@
   <section>
     {#if error}<div class="error">{error}</div>{/if}
     {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
+    <div class="listbar">
+      <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
+        <option value={25}>25</option>
+        <option value={50}>50</option>
+        <option value={100}>100</option>
+        <option value={0}>{$t("rides.filter.all")}</option>
+      </select>
+      {#if totalPages > 1}
+        <div class="pager">
+          <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+          <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+          <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+        </div>
+      {/if}
+    </div>
     <div class="table-container">
       <table class="rides">
         <thead>
@@ -288,6 +313,12 @@
 <!-- Mobile (≤768px): card list instead of the wide table. -->
 <div class="mobile-only">
   <div class="toolbar">
+    <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
+      <option value={25}>25</option>
+      <option value={50}>50</option>
+      <option value={100}>100</option>
+      <option value={0}>{$t("rides.filter.all")}</option>
+    </select>
     <select
       class="sort"
       aria-label={$t("rides.sort")}
@@ -311,6 +342,14 @@
 
   {#if error}<div class="error">{error}</div>{/if}
   {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
+
+  {#if totalPages > 1}
+    <div class="pager">
+      <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+      <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+      <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+    </div>
+  {/if}
 
   <ul class="ride-cards">
     {#each sortedRides as r}
@@ -402,7 +441,7 @@
       class="sheet-apply"
       on:click={() => {
         filterOpen = false;
-        load();
+        reload();
       }}
     >
       {$t("rides.filter.apply")}
@@ -440,11 +479,15 @@
 
   .toolbar {
     display: grid;
-    grid-template-columns: minmax(110px, 1.1fr) auto 1.4fr;
+    grid-template-columns: 70px minmax(110px, 1.1fr) auto 1.4fr;
     gap: 8px;
     margin-bottom: 12px;
   }
   .toolbar .sort { width: 100%; }
+
+  .listbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .listbar select { width: 70px; }
+  .pager { display: flex; align-items: center; gap: 8px; }
 
   .ride-cards {
     list-style: none;

@@ -34,7 +34,7 @@ def list_rides(
     max_km: float | None = Query(None, ge=0),
     min_hours: float | None = Query(None, ge=0),
     max_hours: float | None = Query(None, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(0, ge=0, description="Page size; 0 = no limit"),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     where = []
@@ -67,17 +67,18 @@ def list_rides(
         total = conn.execute(
             f"SELECT COUNT(*) AS c FROM activities a {where_sql}", params
         ).fetchone()["c"]
-        rows = conn.execute(
-            f"""
+        sql = f"""
             SELECT a.*, b.name AS bike_name, b.brand AS bike_brand, b.model AS bike_model
             FROM activities a
             LEFT JOIN bikes b ON a.bike_id = b.id
             {where_sql}
             ORDER BY a.start_time DESC
-            LIMIT ? OFFSET ?
-            """,
-            [*params, limit, offset],
-        ).fetchall()
+        """
+        p: list[Any] = list(params)
+        if limit > 0:
+            sql += " LIMIT ? OFFSET ?"
+            p += [limit, offset]
+        rows = conn.execute(sql, p).fetchall()
 
     return {
         "total": total,

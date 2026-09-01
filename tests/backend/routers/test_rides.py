@@ -32,6 +32,28 @@ def test_rides_bounds(seeded) -> None:
     assert body["moving_s"] == pytest.approx([5_200.0, 5_200.0])
 
 
+def test_rides_pagination(seeded) -> None:
+    from app.db import connect
+
+    conn = connect()
+    conn.execute(
+        "INSERT INTO activities (id, start_time, name, distance_m, moving_s) "
+        "VALUES (2, '2026-05-02T09:00:00Z', 'Second', 10000.0, 3600.0)"
+    )
+    conn.commit()
+    conn.close()
+
+    body = seeded.get("/api/rides", params={"limit": 1, "offset": 0}).json()
+    assert body["total"] == 2
+    assert [r["id"] for r in body["items"]] == [2]  # start_time DESC
+    body = seeded.get("/api/rides", params={"limit": 1, "offset": 1}).json()
+    assert [r["id"] for r in body["items"]] == [1]
+    # limit=0 means no limit.
+    assert len(seeded.get("/api/rides", params={"limit": 0}).json()["items"]) == 2
+    # Offset past the end returns an empty page.
+    assert seeded.get("/api/rides", params={"limit": 1, "offset": 2}).json()["items"] == []
+
+
 def test_ride_detail(seeded) -> None:
     res = seeded.get(f"/api/rides/{ACTIVITY_ID}")
     assert res.status_code == 200
