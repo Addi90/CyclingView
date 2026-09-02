@@ -6,8 +6,7 @@
   import RideDetail from "./routes/RideDetail.svelte";
   import SettingsDialog from "./lib/SettingsDialog.svelte";
   import BottomSheet from "./lib/BottomSheet.svelte";
-  import StatsPanel from "./lib/StatsPanel.svelte";
-  import PowerBestsTable from "./lib/PowerBestsTable.svelte";
+  import StatsSheet from "./lib/StatsSheet.svelte";
   import { uploadRequest } from "./lib/upload";
   import { t } from "./lib/i18n";
 
@@ -81,12 +80,12 @@
   >
     <SettingsIcon size={22} />
   </button>
-  <!-- Must live inside <Router>: StatsPanel/PowerBestsTable render <Link>,
-       which needs the router context (crashes the sheet outside). -->
+  <!-- Must live inside <Router>: StatsPanel/PowerBestsTable (inside
+       StatsSheet) render <Link>, which needs the router context (crashes
+       the sheet outside). -->
   <BottomSheet bind:open={statsOpen} title={$t("stats.andBests")}>
     <div class="sheet-stack" on:click={onSheetStackClick}>
-      <StatsPanel />
-      <PowerBestsTable activityId={null} compact />
+      <StatsSheet />
     </div>
   </BottomSheet>
 </Router>
@@ -130,7 +129,7 @@
 
   .tabbar { display: none; }
   .fab { display: none; }
-  .sheet-stack { display: grid; gap: 12px; }
+  .sheet-stack { display: grid; }
   @media (max-width: 768px) {
     .cog { display: none; } /* settings lives in the FAB */
     .fab {

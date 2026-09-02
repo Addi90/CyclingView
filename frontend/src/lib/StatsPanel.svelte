@@ -10,16 +10,28 @@
   /** Bump to force a re-fetch (e.g. after a ride upload). 0 = initial mount only. */
   export let reloadKey = 0;
 
+  /** Year filter for the per-bike table. 0 = all-time (default). */
+  let bikeYear = 0;
+  let bikeYearLoaded = 0;
+  let bikeOpen = true; // expanded per default
+  let bikeLoading = false;
+
   async function load() {
+    if (bikeYear !== 0) bikeLoading = true;
     try {
-      stats = await api.stats();
+      stats = await api.stats(bikeYear || undefined);
+      bikeYearLoaded = bikeYear;
     } catch (e: any) {
       error = e?.message ?? String(e);
+    } finally {
+      bikeLoading = false;
     }
   }
 
   onMount(load);
   $: if (reloadKey > 0) load();
+  $: if (bikeYear !== bikeYearLoaded) load();
+  $: if (bikeYear !== 0) bikeOpen = true;
 </script>
 
 {#if error}
@@ -76,9 +88,19 @@
   {/if}
 
   {#if stats.per_bike.length}
-    <details>
-      <summary>{$t("stats.per_bike")}</summary>
-      <table class="ystats">
+    <details bind:open={bikeOpen}>
+      <summary>
+        <span>{$t("stats.per_bike")}</span>
+        {#if stats.per_year.length}
+          <select class="year-select" bind:value={bikeYear} aria-label={$t("stats.year")}>
+            <option value={0}>{$t("stats.alltime")}</option>
+            {#each stats.per_year as y}
+              <option value={Number(y.year)}>{y.year}</option>
+            {/each}
+          </select>
+        {/if}
+      </summary>
+      <table class="ystats" class:loading={bikeLoading}>
         <thead><tr><th>{$t("stats.bike")}</th><th>{$t("stats.rides")}</th><th>km</th></tr></thead>
         <tbody>
           {#each stats.per_bike as b}
@@ -124,7 +146,35 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 6px;
+    /* flex + custom ::before arrow: the native ::marker jumps to its own
+       line as soon as the summary holds block-level children. */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
   }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: "▸";
+    flex: none;
+    font-size: 11px;
+    transition: transform 0.12s;
+  }
+  details[open] > summary::before { transform: rotate(90deg); }
+  .year-select {
+    margin-left: auto; /* push to the right edge of the summary */
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 6px;
+    min-height: 24px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  table.ystats.loading th, table.ystats.loading td { opacity: 0.4; }
   table.ystats {
     width: 100%;
     font-size: 12px;

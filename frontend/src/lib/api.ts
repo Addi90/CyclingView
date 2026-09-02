@@ -223,7 +223,7 @@ export const api = {
     return res.json();
   },
 
-  stats: () => get<OverallStats>("/stats"),
+  stats: (year?: number) => get<OverallStats>(year ? `/stats?year=${year}` : "/stats"),
 
   powerBestsForRide: (id: number | string) =>
     get<{ activity_id: number; windows_s: number[]; bests: PowerBest[] }>(`/power-bests/${id}`),
