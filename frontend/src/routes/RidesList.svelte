@@ -383,14 +383,6 @@
     </div>
   {/if}
 
-  <details class="msection">
-    <summary>{$t("stats.alltime")}</summary>
-    <StatsPanel reloadKey={refreshKey} />
-  </details>
-  <details class="msection">
-    <summary>{$t("power.bests.short")}</summary>
-    <PowerBestsTable activityId={null} compact={true} reloadKey={refreshKey} />
-  </details>
 </div>
 
 {#if loading}
@@ -568,24 +560,6 @@
     color: var(--muted);
     font-size: 13px;
     margin-top: 4px;
-  }
-
-  .msection {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-top: 12px;
-    padding: 0 14px 12px;
-  }
-  .msection summary {
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--muted);
-    min-height: var(--touch);
-    display: flex;
-    align-items: center;
-    user-select: none;
   }
 
   .sheet-fields { display: grid; gap: 12px; }

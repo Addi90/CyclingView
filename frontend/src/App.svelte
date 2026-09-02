@@ -1,16 +1,20 @@
 <script lang="ts">
   import { Router, Route, Link, navigate } from "svelte-routing";
-  import { Settings as SettingsIcon, List, Plus } from "lucide-svelte";
+  import { Settings as SettingsIcon, List, Plus, BarChart3 } from "lucide-svelte";
     import { Bike } from "lucide-svelte";
   import RidesList from "./routes/RidesList.svelte";
   import RideDetail from "./routes/RideDetail.svelte";
   import SettingsDialog from "./lib/SettingsDialog.svelte";
+  import BottomSheet from "./lib/BottomSheet.svelte";
+  import StatsPanel from "./lib/StatsPanel.svelte";
+  import PowerBestsTable from "./lib/PowerBestsTable.svelte";
   import { uploadRequest } from "./lib/upload";
   import { t } from "./lib/i18n";
 
   export let url = "";
 
   let settingsOpen = false;
+  let statsOpen = false;
 </script>
 
 <Router {url} let:location>
@@ -35,17 +39,16 @@
     </Route>
     <Route path="/"><RidesList /></Route>
   </main>
-  <!-- Mobile bottom tab bar: Rides | + (upload) | Settings. The app has
-       exactly two screens, so two tabs; the center + opens the upload dialog
-       from any screen. Rides doubles as the back escape hatch (no
-       scroll-to-top needed); Settings replaces the header cog. Hidden ≥769px. -->
+  <!-- Mobile bottom tab bar: Rides | + (upload) | Stats & Bests. Settings is
+       the floating gear button (FAB) on mobile; on desktop it stays the
+       header cog. Hidden ≥769px. -->
   <nav class="tabbar" aria-label="Main navigation">
     <button
       type="button"
       class:active={!location.pathname.startsWith("/rides/")}
       on:click={() => navigate("/")}
     >
-      <List size={20} /><span>{$t("rides.title")}</span>
+      <List size={24} /><span>{$t("rides.title")}</span>
     </button>
     <button
       type="button"
@@ -59,13 +62,29 @@
     >
       <Plus size={26} />
     </button>
-    <button type="button" on:click={() => (settingsOpen = true)}>
-      <SettingsIcon size={20} /><span>{$t("settings.title")}</span>
+    <button type="button" on:click={() => (statsOpen = true)}>
+      <BarChart3 size={24} /><span>{$t("stats.andBests")}</span>
     </button>
   </nav>
+  <button
+    type="button"
+    class="fab"
+    title={$t("settings.title")}
+    aria-label={$t("settings.title")}
+    on:click={() => (settingsOpen = true)}
+  >
+    <SettingsIcon size={22} />
+  </button>
 </Router>
 
 <SettingsDialog bind:open={settingsOpen} />
+
+<BottomSheet bind:open={statsOpen} title={$t("stats.andBests")}>
+  <div class="sheet-stack">
+    <StatsPanel />
+    <PowerBestsTable activityId={null} compact />
+  </div>
+</BottomSheet>
 
 <style>
   header {
@@ -103,8 +122,31 @@
   main { padding: 16px 24px 48px; }
 
   .tabbar { display: none; }
+  .fab { display: none; }
+  .sheet-stack { display: grid; gap: 12px; }
   @media (max-width: 768px) {
-    .cog { display: none; } /* settings lives in the tab bar */
+    .cog { display: none; } /* settings lives in the FAB */
+    .fab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      right: 16px;
+      bottom: calc(92px + env(safe-area-inset-bottom));
+      width: 52px;
+      height: 52px;
+      min-height: 52px;
+      border-radius: 50%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: var(--elev-1);
+      cursor: pointer;
+      z-index: 20;
+      transition: transform 0.12s, box-shadow 0.12s;
+    }
+    .fab:hover { border-color: var(--accent); color: var(--accent); }
+    .fab:active { transform: translateY(1px); box-shadow: var(--elev-1-pressed); }
     .tabbar {
       display: grid;
       grid-template-columns: 1fr auto 1fr;
@@ -114,35 +156,54 @@
       bottom: 0;
       z-index: 30;
       background: var(--panel);
-      border-top: 1px solid var(--border);
-      padding-bottom: env(safe-area-inset-bottom); /* iPhone home indicator */
+      border-top: 2px solid var(--border);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 10px); /* iPhone home indicator + 10px */
     }
     .tabbar button {
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center; /* bar is 72px; keep icon+label centered */
       gap: 2px;
-      min-height: 56px;
+      min-height: 72px;
       background: transparent;
       border: 0;
       color: var(--muted);
       font-size: 11px;
       cursor: pointer;
     }
-    .tabbar button:active { opacity: 0.7; }
     .tabbar button.active { color: var(--accent); }
     .tabbar .plus {
-      width: 52px;
-      height: 52px;
+      /* min-height override: .tabbar button's min-height:72px would clamp
+         the 56px height into a 56×72 ellipse (border-radius:50% on a
+         non-square box). Keep the box square. */
+      width: 56px;
+      height: 56px;
+      min-height: 56px;
       border-radius: 50%;
       align-self: center;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--accent);
+      /* Plastic: subtle top-lit gradient + elevation, pressed on :active.
+         The gradient doubles as contrast: at the icon's (center) position
+         the orange is lightened enough for APCA (pure accent would sit at
+         Lc ~44, just under the 45 threshold — Strava orange's ceiling). */
+      background: linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--accent), rgb(252, 250, 250) 14%),
+        var(--accent)
+      );
+      box-shadow: var(--elev-1);
       color: var(--bg); /* dark on orange: white fails WCAG AA */
+      transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+    }
+    .tabbar .plus:hover { filter: brightness(1.08); }
+    .tabbar .plus:active {
+      transform: translateY(1px);
+      box-shadow: var(--elev-1-pressed);
     }
     /* Keep content clear of the fixed bar */
-    main { padding: 16px 16px calc(76px + env(safe-area-inset-bottom)); }
+    main { padding: 16px 16px calc(92px + env(safe-area-inset-bottom)); }
   }
 </style>
