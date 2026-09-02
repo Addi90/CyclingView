@@ -139,7 +139,7 @@
       justify-content: center;
       position: fixed;
       right: 16px;
-      bottom: calc(92px + env(safe-area-inset-bottom));
+      bottom: calc(132px + env(safe-area-inset-bottom));
       width: 52px;
       height: 52px;
       min-height: 52px;

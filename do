@@ -29,8 +29,8 @@ start_one() { # $1 = backend|frontend — the port is the source of truth
       echo "frontend: missing node_modules — run: npm install --prefix frontend" >&2
       return 1
     }
-    # one pid (exec), and vite roots at cwd, so cd first
-    nohup bash -c 'cd frontend && exec node node_modules/.bin/vite' >>"$RUNTIME_DIR/frontend.log" 2>&1 &
+    # one pid (exec), and vite roots at cwd, so cd first, expose dev server on all interfaces, and redirect logs to a file
+    nohup bash -c 'cd frontend && exec node node_modules/.bin/vite -- --host 0.0.0.0' >>"$RUNTIME_DIR/frontend.log" 2>&1 &
   fi
   pid=$!
   echo "$pid" > "$RUNTIME_DIR/$1.pid"
