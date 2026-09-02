@@ -75,16 +75,17 @@
   >
     <SettingsIcon size={22} />
   </button>
+  <!-- Must live inside <Router>: StatsPanel/PowerBestsTable render <Link>,
+       which needs the router context (crashes the sheet outside). -->
+  <BottomSheet bind:open={statsOpen} title={$t("stats.andBests")}>
+    <div class="sheet-stack">
+      <StatsPanel />
+      <PowerBestsTable activityId={null} compact />
+    </div>
+  </BottomSheet>
 </Router>
 
 <SettingsDialog bind:open={settingsOpen} />
-
-<BottomSheet bind:open={statsOpen} title={$t("stats.andBests")}>
-  <div class="sheet-stack">
-    <StatsPanel />
-    <PowerBestsTable activityId={null} compact />
-  </div>
-</BottomSheet>
 
 <style>
   header {
