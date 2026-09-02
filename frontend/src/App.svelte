@@ -15,6 +15,12 @@
 
   let settingsOpen = false;
   let statsOpen = false;
+
+  // Clicking a <Link> inside the sheet (ride bests, stats) navigates to the
+  // ride; close the sheet so it doesn't sit over the loaded detail page.
+  function onSheetStackClick(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest("a")) statsOpen = false;
+  }
 </script>
 
 <Router {url} let:location>
@@ -78,7 +84,7 @@
   <!-- Must live inside <Router>: StatsPanel/PowerBestsTable render <Link>,
        which needs the router context (crashes the sheet outside). -->
   <BottomSheet bind:open={statsOpen} title={$t("stats.andBests")}>
-    <div class="sheet-stack">
+    <div class="sheet-stack" on:click={onSheetStackClick}>
       <StatsPanel />
       <PowerBestsTable activityId={null} compact />
     </div>
