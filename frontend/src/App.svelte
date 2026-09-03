@@ -5,15 +5,32 @@
   import RidesList from "./routes/RidesList.svelte";
   import RideDetail from "./routes/RideDetail.svelte";
   import SettingsDialog from "./lib/SettingsDialog.svelte";
+  import SettingsSheet from "./lib/SettingsSheet.svelte";
   import BottomSheet from "./lib/BottomSheet.svelte";
   import StatsSheet from "./lib/StatsSheet.svelte";
   import { uploadRequest } from "./lib/upload";
   import { t } from "./lib/i18n";
+  import { onMount, onDestroy } from "svelte";
 
   export let url = "";
 
   let settingsOpen = false;
   let statsOpen = false;
+
+  // ≤768px: settings open as a swipeable bottom sheet (like stats); ≥769px:
+  // centered modal dialog. The settings tab (mobile) and the gear (desktop)
+  // both toggle `settingsOpen`; only the one matching the viewport renders.
+  let isMobile = false;
+  let mql: MediaQueryList | null = null;
+  function onMql(e: MediaQueryListEvent) {
+    isMobile = e.matches;
+  }
+  onMount(() => {
+    mql = window.matchMedia("(max-width: 768px)");
+    isMobile = mql.matches;
+    mql.addEventListener("change", onMql);
+  });
+  onDestroy(() => mql?.removeEventListener("change", onMql));
 
   // Clicking a <Link> inside the sheet (ride bests, stats) navigates to the
   // ride; close the sheet so it doesn't sit over the loaded detail page.
@@ -44,9 +61,10 @@
     </Route>
     <Route path="/"><RidesList /></Route>
   </main>
-  <!-- Mobile bottom tab bar: Rides | + (upload) | Stats & Bests. Settings is
-       the floating gear button (FAB) on mobile; on desktop it stays the
-       header cog. Hidden ≥769px. -->
+  <!-- Mobile bottom tab bar: Rides | Stats & Bests | Settings (all normal
+       buttons; stats sits in the middle, settings on the right). Upload is the
+       floating orange button (FAB) on mobile; on desktop it's the RidesList
+       toolbar button. Hidden ≥769px. -->
   <nav class="tabbar" aria-label="Main navigation">
     <button
       type="button"
@@ -55,30 +73,24 @@
     >
       <List size={24} /><span>{$t("rides.title")}</span>
     </button>
-    <button
-      type="button"
-      class="plus"
-      aria-label={$t("rides.upload")}
-      title={$t("rides.upload")}
-      on:click={() => {
-        uploadRequest.update((n) => n + 1);
-        if (location.pathname.startsWith("/rides/")) navigate("/");
-      }}
-    >
-      <Plus size={26} />
-    </button>
     <button type="button" on:click={() => (statsOpen = true)}>
       <BarChart3 size={24} /><span>{$t("stats.andBests")}</span>
+    </button>
+    <button type="button" on:click={() => (settingsOpen = true)}>
+      <SettingsIcon size={24} /><span>{$t("settings.title")}</span>
     </button>
   </nav>
   <button
     type="button"
     class="fab"
-    title={$t("settings.title")}
-    aria-label={$t("settings.title")}
-    on:click={() => (settingsOpen = true)}
+    title={$t("rides.upload")}
+    aria-label={$t("rides.upload")}
+    on:click={() => {
+      uploadRequest.update((n) => n + 1);
+      if (location.pathname.startsWith("/rides/")) navigate("/");
+    }}
   >
-    <SettingsIcon size={22} />
+    <Plus size={26} />
   </button>
   <!-- Must live inside <Router>: StatsPanel/PowerBestsTable (inside
        StatsSheet) render <Link>, which needs the router context (crashes
@@ -88,14 +100,28 @@
       <StatsSheet />
     </div>
   </BottomSheet>
+  <!-- Mobile settings: swipeable bottom sheet with a pill bar (Profil |
+       Auswertung | Räder | Daten), same pattern as the stats sheet. -->
+  {#if isMobile}
+    <BottomSheet bind:open={settingsOpen} title={$t("settings.title")}>
+      <div class="sheet-stack">
+        <SettingsSheet />
+      </div>
+    </BottomSheet>
+  {/if}
 </Router>
 
-<SettingsDialog bind:open={settingsOpen} />
+{#if !isMobile}
+  <SettingsDialog bind:open={settingsOpen} />
+{/if}
 
 <style>
   header {
     border-bottom: 1px solid var(--border);
-    padding: 12px 24px;
+    /* top inset is 0 in normal Safari (status bar is browser chrome); it only
+       becomes non-zero in standalone/fullscreen, where it keeps the header
+       content clear of the notch. */
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 24px;
     background: var(--panel);
     position: sticky;
     top: 0;
@@ -131,7 +157,7 @@
   .fab { display: none; }
   .sheet-stack { display: grid; }
   @media (max-width: 768px) {
-    .cog { display: none; } /* settings lives in the FAB */
+    .cog { display: none; } /* on mobile settings lives in the footer tab bar */
     .fab {
       display: flex;
       align-items: center;
@@ -139,23 +165,30 @@
       position: fixed;
       right: 16px;
       bottom: calc(132px + env(safe-area-inset-bottom));
-      width: 52px;
-      height: 52px;
-      min-height: 52px;
+      width: 56px;
+      height: 56px;
+      min-height: 56px;
       border-radius: 50%;
-      background: var(--panel-2);
-      color: var(--text);
-      border: 1px solid var(--border);
+      border: 0;
+      /* Same plastic orange treatment the tab-bar upload button had: subtle
+         top-lit gradient + elevation. The gradient doubles as contrast: at the
+         icon's (center) position the orange is lightened enough for APCA. */
+      background: linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--accent), rgb(252, 250, 250) 14%),
+        var(--accent)
+      );
       box-shadow: var(--elev-1);
+      color: var(--bg); /* dark on orange: white fails WCAG AA */
       cursor: pointer;
       z-index: 20;
-      transition: transform 0.12s, box-shadow 0.12s;
+      transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
     }
-    .fab:hover { border-color: var(--accent); color: var(--accent); }
+    .fab:hover { filter: brightness(1.08); }
     .fab:active { transform: translateY(1px); box-shadow: var(--elev-1-pressed); }
     .tabbar {
       display: grid;
-      grid-template-columns: 1fr auto 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       position: fixed;
       left: 0;
       right: 0;
@@ -179,36 +212,6 @@
       cursor: pointer;
     }
     .tabbar button.active { color: var(--accent); }
-    .tabbar .plus {
-      /* min-height override: .tabbar button's min-height:72px would clamp
-         the 56px height into a 56×72 ellipse (border-radius:50% on a
-         non-square box). Keep the box square. */
-      width: 56px;
-      height: 56px;
-      min-height: 56px;
-      border-radius: 50%;
-      align-self: center;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /* Plastic: subtle top-lit gradient + elevation, pressed on :active.
-         The gradient doubles as contrast: at the icon's (center) position
-         the orange is lightened enough for APCA (pure accent would sit at
-         Lc ~44, just under the 45 threshold — Strava orange's ceiling). */
-      background: linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--accent), rgb(252, 250, 250) 14%),
-        var(--accent)
-      );
-      box-shadow: var(--elev-1);
-      color: var(--bg); /* dark on orange: white fails WCAG AA */
-      transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
-    }
-    .tabbar .plus:hover { filter: brightness(1.08); }
-    .tabbar .plus:active {
-      transform: translateY(1px);
-      box-shadow: var(--elev-1-pressed);
-    }
     /* Keep content clear of the fixed bar */
     main { padding: 16px 16px calc(92px + env(safe-area-inset-bottom)); }
   }

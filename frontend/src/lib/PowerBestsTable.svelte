@@ -6,6 +6,7 @@
   import { fmtWindow, fmtPower } from "./power-format";
   import { fmtDateShort } from "./format";
   import { t } from "./i18n";
+  import PillBar from "./PillBar.svelte";
 
   /** When set, show this ride's bests; otherwise the all-time leaderboard. */
   export let activityId: number | string | null = null;
@@ -52,15 +53,24 @@
     if ($settings.powerUnit === unit) return;
     settings.update((s) => ({ ...s, powerUnit: unit }));
   }
+
+  // W / W-kg unit toggle options (values match settings.powerUnit).
+  const unitOptions = [
+    { label: "W/kg", value: "W/kg" },
+    { label: "W", value: "W" },
+  ];
 </script>
 
 <section class="bests">
   <header>
     <h3>{title}</h3>
-    <div class="unit-toggle" role="group"
-      title={$t("power.bests.unit_title").replace("{unit}", $settings.powerUnit).replace("{weight}", String($settings.weightKg))}>
-      <button type="button" class:active={$settings.powerUnit === "W/kg"} on:click={() => setPowerUnit("W/kg")}>W/kg</button>
-      <button type="button" class:active={$settings.powerUnit === "W"} on:click={() => setPowerUnit("W")}>W</button>
+    <div class="unit-toggle">
+      <PillBar
+        options={unitOptions}
+        value={$settings.powerUnit}
+        on:change={(e) => setPowerUnit(e.detail)}
+        title={$t("power.bests.unit_title").replace("{unit}", $settings.powerUnit).replace("{weight}", String($settings.weightKg))}
+      />
     </div>
   </header>
 
@@ -144,26 +154,6 @@
   h3 { margin: 0; font-size: 14px; }
   .unit-toggle {
     flex: none; /* don't shrink next to the h3 in narrow panels */
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    overflow: hidden;
-  }
-  .unit-toggle button {
-    flex: none; /* never shrink below content: "W/kg" used to clip */
-    white-space: nowrap;
-    background: transparent;
-    border: 0;
-    color: var(--muted);
-    padding: 3px 12px;
-    font-size: 12px;
-    cursor: pointer;
-    min-height: 26px;
-  }
-  .unit-toggle button.active {
-    background: var(--accent);
-    color: var(--bg); /* dark on orange: white fails WCAG AA */
-    font-weight: 600;
   }
   table {
     width: 100%;

@@ -1,22 +1,32 @@
 <script lang="ts">
-  import StatsPanel from "./StatsPanel.svelte";
-  import PowerBestsTable from "./PowerBestsTable.svelte";
+  import SettingsProfile from "./SettingsProfile.svelte";
+  import SettingsAnalysis from "./SettingsAnalysis.svelte";
+  import SettingsBikes from "./SettingsBikes.svelte";
+  import SettingsData from "./SettingsData.svelte";
   import PillBar from "./PillBar.svelte";
   import { t } from "./i18n";
 
-  /** 0 = all-time stats, 1 = power bests. */
+  /** Page order: 0 = Profil, 1 = Auswertung, 2 = Räder, 3 = Daten. */
+  const TABS = [
+    { key: "settings.profile" as const },
+    { key: "settings.analysis" as const },
+    { key: "settings.bikes" as const },
+    { key: "settings.data" as const },
+  ];
+  const COUNT = TABS.length;
+
   let page = 0;
   let dragging = false;
   let dx = 0;
 
   // Pill-bar options (string[] → value is the page index).
-  $: pageOptions = [$t("stats.alltime"), $t("power.bests.short")];
+  $: pageOptions = TABS.map((tab) => $t(tab.key));
 
-  // Horizontal page swipe. Manual listeners (not on:touchmove) so touchmove is
-  // registered non-passive and preventDefault actually works. Claiming rule:
-  // horizontal only when |dx| dominates |dy| — vertical gestures fall through
-  // to the sheet's own scroll / drag-close, and claimed swipes preventDefault
-  // so the page doesn't scroll vertically mid-swipe.
+  // Horizontal page swipe — same pattern as StatsSheet. Manual listeners (not
+  // on:touchmove) so touchmove is registered non-passive and preventDefault
+  // actually works. Claiming rule: horizontal only when |dx| dominates |dy| —
+  // vertical gestures fall through to the sheet's own scroll / drag-close, and
+  // claimed swipes preventDefault so the page doesn't scroll vertically mid-swipe.
   const SLOP = 10; // px horizontal before claiming the swipe
   const VEL = 0.2; // px/ms horizontal release velocity that flips the page
 
@@ -67,7 +77,7 @@
       const w = el.clientWidth;
       // 1:1 within range; a faint rubber-band at the track edges (no other
       // page peeks in) so the sheet doesn't dead-stop mid-gesture.
-      const atEdge = (page === 0 && ddx > 0) || (page === 1 && ddx < 0);
+      const atEdge = (page === 0 && ddx > 0) || (page === COUNT - 1 && ddx < 0);
       dx = atEdge ? ddx * 0.15 : ddx;
       dx = Math.max(-w, Math.min(w, dx));
       const now = performance.now();
@@ -85,7 +95,7 @@
       const vel = last.t > ref.t ? (last.x - ref.x) / (last.t - ref.t) : 0;
       const w = el.clientWidth;
       const flip = Math.abs(dx) > w * 0.25 || Math.abs(vel) >= VEL;
-      if (flip) page = Math.max(0, Math.min(1, page + (dx < 0 ? 1 : -1)));
+      if (flip) page = Math.max(0, Math.min(COUNT - 1, page + (dx < 0 ? 1 : -1)));
       reset();
     };
 
@@ -103,38 +113,41 @@
   }
 </script>
 
-<!-- Page indicator pills: tap to switch, swipe to swipe. -->
+<!-- Pill page indicator: tap a pill to jump, swipe the track to move. -->
 <div class="pills">
-  <PillBar options={pageOptions} value={page} on:change={(e) => (page = e.detail)} ariaLabel={$t("stats.andBests")} />
+  <PillBar options={pageOptions} value={page} on:change={(e) => (page = e.detail)} ariaLabel={$t("settings.title")} />
 </div>
 
+<!-- Swipeable page track: width COUNT*100%, each page 1/COUNT. -->
 <div class="pages" use:swipe>
-  <!-- One page = 50% of the 200%-wide track: translateX percentages resolve
-       against the track's own box, so -50% = one page (not -100%). -->
   <div
     class="page-track"
     role="tabpanel"
-    style="transform: translateX(calc({-page * 50}% + {dx}px)); transition: {dragging ? "none" : "transform 0.22s ease-out"};"
+    style="transform: translateX(calc({-page * (100 / COUNT)}% + {dx}px)); transition: {dragging ? 'none' : 'transform 0.22s ease-out'};"
   >
-    <div class="page">
-      <StatsPanel />
-    </div>
-    <div class="page">
-      <PowerBestsTable activityId={null} compact />
-    </div>
+    <div class="page"><SettingsProfile /></div>
+    <div class="page"><SettingsAnalysis /></div>
+    <div class="page"><SettingsBikes /></div>
+    <div class="page"><SettingsData /></div>
   </div>
 </div>
 
 <style>
-  .pills { margin-bottom: 12px; }
-  .pages { overflow: hidden; }
+  /* Pill bar wrapper: spacing above the swipe track. */
+  .pills {
+    margin-bottom: 12px;
+  }
+
+  .pages {
+    overflow: hidden;
+  }
   .page-track {
     display: flex;
-    width: 200%;
+    width: 400%;
     will-change: transform;
   }
   .page {
-    flex: 0 0 50%;
+    flex: 0 0 25%;
     min-width: 0;
   }
 </style>
