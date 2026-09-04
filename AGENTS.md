@@ -25,7 +25,8 @@ frontend/src/
                    (Rides | + upload | Stats & Bests), floating settings gear FAB (mobile),
                    stats/bests BottomSheet (must stay inside <Router>)
   routes/          RidesList.svelte (dual layout: desktop table + aside filters / mobile cards
-                   + toolbar + filter sheet; RangeSlider distance/duration filters, pagination,
+                   + toolbar + filter sheet; RangeSlider distance/duration filters, pagination
+                   with mobile swipe-to-paginate (touch/mouse parallax + chevron arrow),
                    blur loading overlay), RideDetail.svelte
   lib/             api.ts (typed fetch client — single source of API truth), i18n.ts (de/en,
                    default de), settings.ts, upload.ts (writable counter that opens UploadDialog
@@ -86,7 +87,8 @@ compose.yaml       docker compose: backend:8000, frontend:8080
 *   Pagination convention: `limit=0` = no limit (rides API), same as `n_points=0` = all points (streams API); frontend per-page 25/50/100/0 ("All"). Keep the 0-means-all convention when adding new list endpoints.
 *   Distance/duration filters (RangeSlider): bounds come from `GET /api/rides/bounds`; a knob parked on the domain edge sends **no** param (unfiltered); the list refetches on knob release, not per drag.
 *   `lib/upload.ts` exports writable counter `uploadRequest`; bumping it opens UploadDialog (used by the mobile tab bar `+`).
-*   svelte-check baseline: 3 pre-existing errors + 15 warnings (RouteMap GeoJSON typing) — don't chase; `npm run build` is the gate.
+*   svelte-check baseline: 3 pre-existing errors + 12 warnings (RouteMap GeoJSON typing) — don't chase; `npm run build` is the gate.
+*   iOS Safari renders `input[type=date]` wider than its CSS box (segments + clear button scale with the text-size setting) — in the mobile filter sheet the date bar can sit flush to the sheet's right edge on some devices. Blind CSS fixes (grid `1fr`, `min-width: 0`, `fit-content`, `text-align: center`) were tried and reverted without resolving it; don't retry blind, get a real-device screenshot first.
 *   Known contrast debt: `--muted` and `--accent` pass WCAG AA but fail APCA Lc 75 for small text; re-tuning the palette is a design decision, not a code fix.
 *   **Two ID schemes**: Strava-ingested activities keep their real Strava `id`; uploaded files get an id of first trackpoint timestamp in **microseconds**. Upload source files are copied to `data/uploads/` as `{id}{suffixes}`; parquet to `data/streams/{id}.parquet`.
 *   `estimated_power` flag = stream has power but Strava marked "Device Watts" false (estimated, not measured). UI surfaces it.

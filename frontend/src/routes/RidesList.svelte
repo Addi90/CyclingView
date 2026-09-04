@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fade } from "svelte/transition";
   import { Link } from "svelte-routing";
-  import { Plus, SlidersHorizontal } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight, Plus, SlidersHorizontal } from "lucide-svelte";
   import { api, type Bike, type Ride } from "../lib/api";
   import { fmtKm, fmtKmh, fmtDuration, fmtNum, fmtDateShort } from "../lib/format";
   import { t } from "../lib/i18n";
@@ -155,6 +156,57 @@
   async function onUploaded() {
     refreshKey++;
     await reload();
+  }
+
+  // Swipe to flip pages: horizontal drag = 0.5x parallax on the card list,
+  // release past 30px = slide out, load the neighbouring page, snap back.
+  let swiping = false;
+  let swipeDir: "" | "off" | "prev" | "next" = "";
+  let swipeOffset = 0;
+  let swipeX = 0;
+  let swipeY = 0;
+  let committed = 0; // px the list slides to on release; 0 = at rest
+  let noAnim = false; // skip the transition for the post-swap snap back
+  function onSwipeStart(e: TouchEvent | MouseEvent) {
+    swiping = true;
+    swipeDir = "";
+    swipeOffset = 0;
+    const p = ((e as any).touches ?? [e])[0];
+    swipeX = p.clientX;
+    swipeY = p.clientY;
+  }
+  function onSwipeMove(e: TouchEvent | MouseEvent) {
+    if (!swiping) return;
+    const p = ((e as any).touches ?? [e])[0];
+    const dx = p.clientX - swipeX;
+    const dy = p.clientY - swipeY;
+    if (swipeDir === "") {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) swipeDir = dx > 0 ? "prev" : "next";
+      else if (Math.abs(dy) > 10) swipeDir = "off"; // vertical scroll, not a swipe
+      if (swipeDir !== "prev" && swipeDir !== "next") return;
+    }
+    swipeOffset = dx;
+    if (e.cancelable) e.preventDefault(); // claim the gesture so the page doesn't rubber-band
+  }
+  function onSwipeEnd() {
+    if (!swiping) return;
+    swiping = false;
+    const dir = swipeDir;
+    const dx = swipeOffset;
+    swipeOffset = 0;
+    swipeDir = "";
+    if ((dir === "prev" && dx > 30 && page > 1) || (dir === "next" && dx < -30 && page < totalPages)) {
+      committed = dir === "prev" ? 100 : -100; // slide out (180ms ease)
+      setTimeout(() => {
+        noAnim = true;
+        committed = 0; // snap to 0 without a visible slide back
+        if (dir === "prev" ? page > 1 : page < totalPages) {
+          if (dir === "prev") page -= 1; else page += 1;
+          load(); // the blur overlay covers the content swap
+        }
+        setTimeout(() => (noAnim = false), 50);
+      }, 180);
+    }
   }
 </script>
 
@@ -310,7 +362,17 @@
 </div>
 
 <!-- Mobile (≤768px): card list instead of the wide table. -->
-<div class="mobile-only">
+<div
+  class="mobile-only"
+  on:touchstart={onSwipeStart}
+  on:touchmove={onSwipeMove}
+  on:touchend={onSwipeEnd}
+  on:touchcancel={onSwipeEnd}
+  on:mousedown={onSwipeStart}
+  on:mousemove={onSwipeMove}
+  on:mouseup={onSwipeEnd}
+  on:mouseleave={onSwipeEnd}
+>
   <div class="toolbar">
     <select
       class="sort"
@@ -349,7 +411,11 @@
     </div>
   {/if}
 
-  <ul class="ride-cards">
+  <ul
+    class="ride-cards"
+    style:transform={`translateX(${committed !== 0 ? committed : swiping ? swipeOffset * 0.5 : 0}px)`}
+    style:transition={swiping || noAnim ? "none" : "transform 180ms ease"}
+  >
     {#each sortedRides as r}
       <li>
         <Link to={`/rides/${r.id}`} class="ride-card">
@@ -383,6 +449,20 @@
     </div>
   {/if}
 
+  {#if swiping && ((swipeDir === "prev" && page > 1) || (swipeDir === "next" && page < totalPages))}
+    <div
+      class="swipe-arrow"
+      style:left={swipeDir === "next" ? "75%" : "25%"}
+      transition:fade={{ duration: 120 }}
+      aria-hidden="true"
+    >
+      {#if swipeDir === "next"}
+        <ChevronRight size={36} />
+      {:else}
+        <ChevronLeft size={36} />
+      {/if}
+    </div>
+  {/if}
 </div>
 
 {#if loading}
@@ -474,8 +554,9 @@
     overflow-y: auto;
   }
 
-  /* Mobile view swap: table layout hidden, card list shown (no JS media query). */
-  .mobile-only { display: none; }
+  /* Mobile view swap: table layout hidden, card list shown (no JS media query).
+     touch-action: pan-y keeps vertical scroll, horizontal swipes are ours (onSwipe*). */
+  .mobile-only { display: none; touch-action: pan-y; }
   @media (max-width: 768px) {
     .layout { display: none; }
     .mobile-only { display: block; }
@@ -497,6 +578,26 @@
   .pager.full button:first-child { text-align: left; }
   .pager.full button:last-child { text-align: right; }
   .pager.full .muted { flex: 1; text-align: center; }
+
+  /* Floating direction arrow while swiping (hidden until direction is locked). */
+  .swipe-arrow {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    color: var(--accent);
+    pointer-events: none;
+    z-index: 70;
+  }
 
   .loading-overlay {
     position: fixed;
