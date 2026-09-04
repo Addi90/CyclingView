@@ -1,23 +1,74 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fade } from "svelte/transition";
   import { Link } from "svelte-routing";
-  import { Plus } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight, Plus, SlidersHorizontal } from "lucide-svelte";
   import { api, type Bike, type Ride } from "../lib/api";
   import { fmtKm, fmtKmh, fmtDuration, fmtNum, fmtDateShort } from "../lib/format";
   import { t } from "../lib/i18n";
   import UploadDialog from "../lib/UploadDialog.svelte";
   import StatsPanel from "../lib/StatsPanel.svelte";
   import PowerBestsTable from "../lib/PowerBestsTable.svelte";
+  import BottomSheet from "../lib/BottomSheet.svelte";
+  import RangeSlider from "../lib/RangeSlider.svelte";
+  import { uploadRequest } from "../lib/upload";
 
   let bikes: Bike[] = [];
   let rides: Ride[] = [];
   let total = 0;
+  let perPage = 25; // 0 = all on one page
+  let page = 1;
+  $: totalPages = perPage > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
   let bikeFilter: number | "" = "";
   let dateFrom = "";
   let dateTo = "";
+  // Slider domains are the DB min/max (km / h); lo/hi are the knob positions.
+  let distDomain: [number, number] | null = null;
+  let durDomain: [number, number] | null = null;
+  let distLo = 0;
+  let distHi = 0;
+  let durLo = 0;
+  let durHi = 0;
+  let distInit = false;
+  let durInit = false;
+  $: if (distDomain && !distInit) {
+    distLo = distDomain[0];
+    distHi = distDomain[1];
+    distInit = true;
+  }
+  $: if (durDomain && !durInit) {
+    durLo = durDomain[0];
+    durHi = durDomain[1];
+    durInit = true;
+  }
   let loading = false;
   let error = "";
   let uploadOpen = false;
+  let filterOpen = false;
+
+  // The mobile tab bar "plus" bumps this from App; opening the dialog here
+  // makes the request work from any screen (RideDetail navigates to the
+  // list first, and this also fires on the fresh mount).
+  $: if ($uploadRequest > 0) uploadOpen = true;
+
+  const SORT_KEYS = {
+    start_time: true, name: true, bike_name: true,
+    distance_m: true, moving_s: true, avg_speed_ms: true,
+    avg_power: true, np_power: true, avg_hr: true, elevation_gain_m: true,
+  } as const;
+  // Mobile sort select value, e.g. "start_time:desc". Syncs with sortKey/sortDir
+  // (the desktop th-sorters update it in turn).
+  $: sortSel = `${sortKey}:${sortDir}`;
+  function applySortSel() {
+    const [k, d] = sortSel.split(":");
+    if (k in SORT_KEYS && (d === "asc" || d === "desc")) {
+      sortKey = k as SortKey;
+      sortDir = d as "asc" | "desc";
+    }
+  }
+  // Bumped after each upload: StatsPanel/PowerBestsTable watch `reloadKey`
+  // and re-fetch (they otherwise only load once per page load).
+  let refreshKey = 0;
 
   type SortKey =
     | "start_time" | "name" | "bike_name"
@@ -65,7 +116,13 @@
         bike_id: bikeFilter === "" ? undefined : Number(bikeFilter),
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-        limit: 500,
+        // Knob at the domain edge = unbounded.
+        min_km: distDomain && distLo > distDomain[0] ? distLo : undefined,
+        max_km: distDomain && distHi < distDomain[1] ? distHi : undefined,
+        min_hours: durDomain && durLo > durDomain[0] ? durLo : undefined,
+        max_hours: durDomain && durHi < durDomain[1] ? durHi : undefined,
+        limit: perPage,
+        offset: perPage > 0 ? (page - 1) * perPage : 0,
       });
       rides = res.items;
       total = res.total;
@@ -76,13 +133,80 @@
     }
   }
 
+  // Snap bounds to the step grid so the knobs land on clean values
+  // (e.g. 0.00 / 0.25 / 0.50 h instead of 0.01 / 0.26 / 0.51 h).
+  function snapBounds(min: number, max: number, step: number): [number, number] {
+    return [Math.floor(min / step) * step, Math.ceil(max / step) * step];
+  }
+
   onMount(async () => {
     bikes = await api.bikes();
     await load();
+    const b = await api.rideBounds();
+    if (b.distance_m) distDomain = snapBounds(b.distance_m[0] / 1000, b.distance_m[1] / 1000, 1);
+    if (b.moving_s) durDomain = snapBounds(b.moving_s[0] / 3600, b.moving_s[1] / 3600, 0.25);
   });
 
+  // Filter / page-size changes go back to the first page.
+  function reload() {
+    page = 1;
+    load();
+  }
+
   async function onUploaded() {
-    await load();
+    refreshKey++;
+    await reload();
+  }
+
+  // Swipe to flip pages: horizontal drag = 0.5x parallax on the card list,
+  // release past 30px = slide out, load the neighbouring page, snap back.
+  let swiping = false;
+  let swipeDir: "" | "off" | "prev" | "next" = "";
+  let swipeOffset = 0;
+  let swipeX = 0;
+  let swipeY = 0;
+  let committed = 0; // px the list slides to on release; 0 = at rest
+  let noAnim = false; // skip the transition for the post-swap snap back
+  function onSwipeStart(e: TouchEvent | MouseEvent) {
+    swiping = true;
+    swipeDir = "";
+    swipeOffset = 0;
+    const p = ((e as any).touches ?? [e])[0];
+    swipeX = p.clientX;
+    swipeY = p.clientY;
+  }
+  function onSwipeMove(e: TouchEvent | MouseEvent) {
+    if (!swiping) return;
+    const p = ((e as any).touches ?? [e])[0];
+    const dx = p.clientX - swipeX;
+    const dy = p.clientY - swipeY;
+    if (swipeDir === "") {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) swipeDir = dx > 0 ? "prev" : "next";
+      else if (Math.abs(dy) > 10) swipeDir = "off"; // vertical scroll, not a swipe
+      if (swipeDir !== "prev" && swipeDir !== "next") return;
+    }
+    swipeOffset = dx;
+    if (e.cancelable) e.preventDefault(); // claim the gesture so the page doesn't rubber-band
+  }
+  function onSwipeEnd() {
+    if (!swiping) return;
+    swiping = false;
+    const dir = swipeDir;
+    const dx = swipeOffset;
+    swipeOffset = 0;
+    swipeDir = "";
+    if ((dir === "prev" && dx > 30 && page > 1) || (dir === "next" && dx < -30 && page < totalPages)) {
+      committed = dir === "prev" ? 100 : -100; // slide out (180ms ease)
+      setTimeout(() => {
+        noAnim = true;
+        committed = 0; // snap to 0 without a visible slide back
+        if (dir === "prev" ? page > 1 : page < totalPages) {
+          if (dir === "prev") page -= 1; else page += 1;
+          load(); // the blur overlay covers the content swap
+        }
+        setTimeout(() => (noAnim = false), 50);
+      }, 180);
+    }
   }
 </script>
 
@@ -91,7 +215,7 @@
     <h3>{$t("rides.filter")}</h3>
     <label>
       {$t("rides.filter.bike")}
-      <select bind:value={bikeFilter} on:change={load}>
+      <select bind:value={bikeFilter} on:change={reload}>
         <option value="">{$t("rides.filter.all")}</option>
         {#each bikes as b}
           <option value={b.id}>{b.name}</option>
@@ -100,21 +224,53 @@
     </label>
     <label>
       {$t("rides.filter.from")}
-      <input type="date" bind:value={dateFrom} on:change={load} />
+      <input type="date" bind:value={dateFrom} on:change={reload} />
     </label>
     <label>
       {$t("rides.filter.to")}
-      <input type="date" bind:value={dateTo} on:change={load} />
+      <input type="date" bind:value={dateTo} on:change={reload} />
     </label>
+    {#if distDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dist")}</span>
+        <RangeSlider
+          min={distDomain[0]}
+          max={distDomain[1]}
+          step={1}
+          bind:lo={distLo}
+          bind:hi={distHi}
+          unit="km"
+          decimals={1}
+          ariaLabel={$t("rides.filter.dist")}
+          on:change={reload}
+        />
+      </div>
+    {/if}
+    {#if durDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dur")}</span>
+        <RangeSlider
+          min={durDomain[0]}
+          max={durDomain[1]}
+          step={0.25}
+          bind:lo={durLo}
+          bind:hi={durHi}
+          unit="h"
+          decimals={2}
+          ariaLabel={$t("rides.filter.dur")}
+          on:change={reload}
+        />
+      </div>
+    {/if}
     <p class="muted">{$t("rides.filter.count").replace("{count}", String(total))}</p>
     <button type="button" class="upload_action" on:click={() => (uploadOpen = true)}>
       <Plus size={16} /> {$t("rides.upload")}
     </button>
     <hr />
-    <StatsPanel />
+    <StatsPanel reloadKey={refreshKey} />
 
     <hr />
-    <PowerBestsTable activityId={null} compact={true} />
+    <PowerBestsTable activityId={null} compact={true} reloadKey={refreshKey} />
 
     <hr />
 
@@ -122,7 +278,21 @@
 
   <section>
     {#if error}<div class="error">{error}</div>{/if}
-    {#if loading}<p class="muted">{$t("common.loading")}</p>{/if}
+    <div class="listbar">
+      <div class="pager">
+        {#if totalPages > 1}
+          <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+          <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+          <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+        {/if}
+      </div>
+      <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
+        <option value={25}>25</option>
+        <option value={50}>50</option>
+        <option value={100}>100</option>
+        <option value={0}>{$t("rides.filter.all")}</option>
+      </select>
+    </div>
     <div class="table-container">
       <table class="rides">
         <thead>
@@ -191,6 +361,178 @@
   </section>
 </div>
 
+<!-- Mobile (≤768px): card list instead of the wide table. -->
+<div
+  class="mobile-only"
+  on:touchstart={onSwipeStart}
+  on:touchmove={onSwipeMove}
+  on:touchend={onSwipeEnd}
+  on:touchcancel={onSwipeEnd}
+  on:mousedown={onSwipeStart}
+  on:mousemove={onSwipeMove}
+  on:mouseup={onSwipeEnd}
+  on:mouseleave={onSwipeEnd}
+>
+  <div class="toolbar">
+    <select
+      class="sort"
+      aria-label={$t("rides.sort")}
+      bind:value={sortSel}
+      on:change={applySortSel}
+    >
+      <option value="start_time:desc">{$t("rides.sort.newest")}</option>
+      <option value="start_time:asc">{$t("rides.sort.oldest")}</option>
+      <option value="distance_m:desc">{$t("rides.sort.distance")}</option>
+      <option value="moving_s:desc">{$t("rides.sort.duration")}</option>
+      <option value="avg_speed_ms:desc">{$t("rides.sort.speed")}</option>
+      <option value="avg_power:desc">{$t("rides.sort.power")}</option>
+      <option value="avg_hr:desc">{$t("rides.sort.hr")}</option>
+      <option value="elevation_gain_m:desc">{$t("rides.sort.elevation")}</option>
+    </select>
+    <button type="button" on:click={() => (filterOpen = true)}>
+      <SlidersHorizontal size={16} /> {$t("rides.filter")}
+    </button>
+    <select bind:value={perPage} on:change={reload} aria-label={$t("rides.perPage")}>
+      <option value={25}>25</option>
+      <option value={50}>50</option>
+      <option value={100}>100</option>
+      <option value={0}>{$t("rides.filter.all")}</option>
+    </select>
+    <!-- upload: footer + only on mobile (the toolbar copy below stays desktop) -->
+  </div>
+
+  {#if error}<div class="error">{error}</div>{/if}
+
+  {#if totalPages > 1}
+    <div class="pager full">
+      <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+      <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+      <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+    </div>
+  {/if}
+
+  <ul
+    class="ride-cards"
+    style:transform={`translateX(${committed !== 0 ? committed : swiping ? swipeOffset * 0.5 : 0}px)`}
+    style:transition={swiping || noAnim ? "none" : "transform 180ms ease"}
+  >
+    {#each sortedRides as r}
+      <li>
+        <Link to={`/rides/${r.id}`} class="ride-card">
+          <div class="rc-top">
+            <span class="rc-name">{r.name ?? "–"}</span>
+            <span class="rc-date">{fmtDateShort(r.start_time)}</span>
+          </div>
+          <div class="rc-sub">
+            {#if r.bike_name}<span>{r.bike_name}</span>{/if}
+            <span>{fmtKm(r.distance_m)}</span>
+            <span>{fmtDuration(r.moving_s ?? r.elapsed_s)}</span>
+            {#if r.avg_power != null}
+              <span>
+                {fmtNum(r.avg_power, 0, " W")}
+                {#if r.estimated_power}
+                  <span class="estimated" title={$t("ride.power.estimated")}>*</span>
+                {/if}
+              </span>
+            {/if}
+          </div>
+        </Link>
+      </li>
+    {/each}
+  </ul>
+
+  {#if totalPages > 1}
+    <div class="pager full">
+      <button type="button" disabled={page <= 1} on:click={() => { page -= 1; load(); }} aria-label={$t("rides.prev")}>←</button>
+      <span class="muted">{$t("rides.page").replace("{x}", String(page)).replace("{y}", String(totalPages))}</span>
+      <button type="button" disabled={page >= totalPages} on:click={() => { page += 1; load(); }} aria-label={$t("rides.next")}>→</button>
+    </div>
+  {/if}
+
+  {#if swiping && ((swipeDir === "prev" && page > 1) || (swipeDir === "next" && page < totalPages))}
+    <div
+      class="swipe-arrow"
+      style:left={swipeDir === "next" ? "75%" : "25%"}
+      transition:fade={{ duration: 120 }}
+      aria-hidden="true"
+    >
+      {#if swipeDir === "next"}
+        <ChevronRight size={36} />
+      {:else}
+        <ChevronLeft size={36} />
+      {/if}
+    </div>
+  {/if}
+</div>
+
+{#if loading}
+  <div class="loading-overlay" role="status" aria-label={$t("common.loading")}>
+    <div class="spinner" aria-hidden="true"></div>
+  </div>
+{/if}
+
+<BottomSheet bind:open={filterOpen} title={$t("rides.filter")}>
+  <div class="sheet-fields">
+    <label>
+      {$t("rides.filter.bike")}
+      <select bind:value={bikeFilter}>
+        <option value="">{$t("rides.filter.all")}</option>
+        {#each bikes as b}
+          <option value={b.id}>{b.name}</option>
+        {/each}
+      </select>
+    </label>
+    <label>
+      {$t("rides.filter.from")}
+      <input type="date" bind:value={dateFrom} />
+    </label>
+    <label>
+      {$t("rides.filter.to")}
+      <input type="date" bind:value={dateTo} />
+    </label>
+    {#if distDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dist")}</span>
+        <RangeSlider
+          min={distDomain[0]}
+          max={distDomain[1]}
+          step={1}
+          bind:lo={distLo}
+          bind:hi={distHi}
+          unit="km"
+          decimals={1}
+          ariaLabel={$t("rides.filter.dist")}
+        />
+      </div>
+    {/if}
+    {#if durDomain}
+      <div class="filter-label">
+        <span>{$t("rides.filter.dur")}</span>
+        <RangeSlider
+          min={durDomain[0]}
+          max={durDomain[1]}
+          step={0.25}
+          bind:lo={durLo}
+          bind:hi={durHi}
+          unit="h"
+          decimals={2}
+          ariaLabel={$t("rides.filter.dur")}
+        />
+      </div>
+    {/if}
+    <button
+      type="button"
+      class="sheet-apply"
+      on:click={() => {
+        filterOpen = false;
+        reload();
+      }}
+    >
+      {$t("rides.filter.apply")}
+    </button>
+  </div>
+</BottomSheet>
+
 <UploadDialog bind:open={uploadOpen} {bikes} on:uploaded={onUploaded} />
 
 <style>
@@ -212,43 +554,124 @@
     overflow-y: auto;
   }
 
-  @media (max-width: 800px) {
-    .layout {
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-    aside {
-      order: 1;
-      position: static;
-      max-height: none;
-      width: 100%;
-      margin-bottom: 8px;
-    }
-    section {
-      order: 2;
-      width: 100%;
-      overflow: hidden;
-    }
-    table.rides {
-      min-width: 400px;
-    }
-    table.rides th, table.rides td {
-      padding: 10px 8px;
-    }
-    table.rides .col-date { width: 85px; }
-    table.rides .col-dist { width: 55px; }
-    .col-name {
-      max-width: 90px;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-    }
-    /* Hide less critical columns on small screens to fit Date, Name, Distance */
-    .col-bike, .col-speed, .col-np, .col-hr, .col-elev {
-      display: none;
-    }
-    table.rides .col-name {
-      white-space: normal ;
-    }
+  /* Mobile view swap: table layout hidden, card list shown (no JS media query).
+     touch-action: pan-y keeps vertical scroll, horizontal swipes are ours (onSwipe*). */
+  .mobile-only { display: none; touch-action: pan-y; }
+  @media (max-width: 768px) {
+    .layout { display: none; }
+    .mobile-only { display: block; }
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: minmax(110px, 1.1fr) auto 70px;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .toolbar .sort { width: 100%; }
+
+  .listbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .listbar select { width: 70px; }
+  .pager { display: flex; align-items: center; gap: 8px; }
+  .pager.full { margin: 12px 0; }
+  .pager.full button { flex: 1; }
+  .pager.full button:first-child { text-align: left; }
+  .pager.full button:last-child { text-align: right; }
+  .pager.full .muted { flex: 1; text-align: center; }
+
+  /* Floating direction arrow while swiping (hidden until direction is locked). */
+  .swipe-arrow {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    color: var(--accent);
+    pointer-events: none;
+    z-index: 70;
+  }
+
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--bg) 45%, transparent);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation: none; }
+  }
+
+  .ride-cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ride-card {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    min-height: var(--touch);
+  }
+  .ride-card:active { background: var(--panel-2); }
+  .rc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .rc-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rc-date { color: var(--muted); font-size: 13px; flex-shrink: 0; }
+  .rc-sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .sheet-fields { display: grid; gap: 12px; }
+  .sheet-fields label, .sheet-fields .filter-label { display: block; font-size: 13px; color: var(--muted); }
+  .sheet-fields select, .sheet-fields input { width: 100%; margin-top: 4px; }
+  .sheet-apply {
+    background: var(--accent);
+    border-color: var(--accent);
+    /* Dark text on the orange: white would fail WCAG AA (3.3:1). */
+    color: var(--bg);
+    font-weight: 600;
   }
 
   section {
@@ -291,7 +714,7 @@
   table.rides tr:last-child td { border-bottom: none; }
 
   aside h3 { margin-top: 0; }
-  aside label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+  aside label, aside .filter-label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
   aside select, aside input { display: block; margin-top: 4px; width: 100%; }
   aside hr { border: none; border-top: 1px solid var(--border); margin: 16px 0 12px; }
   .action { width: 100%; margin-bottom: 8px; text-align: left; }
@@ -324,5 +747,5 @@
   table.rides th.active { color: var(--accent); }
   table.rides th.num, table.rides td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .muted { color: var(--muted); font-size: 13px; }
-  .error { color: #ef4444; padding: 8px; border: 1px solid #ef4444; border-radius: 6px; margin-bottom: 12px; }
+  .error { color: var(--hr); padding: 8px; border: 1px solid var(--hr); border-radius: 6px; margin-bottom: 12px; }
 </style>

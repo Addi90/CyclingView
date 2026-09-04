@@ -1,18 +1,45 @@
 <script lang="ts">
-  import { Router, Route, Link } from "svelte-routing";
-  import { Settings as SettingsIcon } from "lucide-svelte";
+  import { Router, Route, Link, navigate } from "svelte-routing";
+  import { Settings as SettingsIcon, List, Plus, BarChart3 } from "lucide-svelte";
     import { Bike } from "lucide-svelte";
   import RidesList from "./routes/RidesList.svelte";
   import RideDetail from "./routes/RideDetail.svelte";
   import SettingsDialog from "./lib/SettingsDialog.svelte";
+  import SettingsSheet from "./lib/SettingsSheet.svelte";
+  import BottomSheet from "./lib/BottomSheet.svelte";
+  import StatsSheet from "./lib/StatsSheet.svelte";
+  import { uploadRequest } from "./lib/upload";
   import { t } from "./lib/i18n";
+  import { onMount, onDestroy } from "svelte";
 
   export let url = "";
 
   let settingsOpen = false;
+  let statsOpen = false;
+
+  // ≤768px: settings open as a swipeable bottom sheet (like stats); ≥769px:
+  // centered modal dialog. The settings tab (mobile) and the gear (desktop)
+  // both toggle `settingsOpen`; only the one matching the viewport renders.
+  let isMobile = false;
+  let mql: MediaQueryList | null = null;
+  function onMql(e: MediaQueryListEvent) {
+    isMobile = e.matches;
+  }
+  onMount(() => {
+    mql = window.matchMedia("(max-width: 768px)");
+    isMobile = mql.matches;
+    mql.addEventListener("change", onMql);
+  });
+  onDestroy(() => mql?.removeEventListener("change", onMql));
+
+  // Clicking a <Link> inside the sheet (ride bests, stats) navigates to the
+  // ride; close the sheet so it doesn't sit over the loaded detail page.
+  function onSheetStackClick(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest("a")) statsOpen = false;
+  }
 </script>
 
-<Router {url}>
+<Router {url} let:location>
   <header>
     <div class="spacer"></div>
 <Link to="/"><h1><Bike size={30} /> Cycling View</h1></Link>
@@ -34,14 +61,67 @@
     </Route>
     <Route path="/"><RidesList /></Route>
   </main>
+  <!-- Mobile bottom tab bar: Rides | Stats & Bests | Settings (all normal
+       buttons; stats sits in the middle, settings on the right). Upload is the
+       floating orange button (FAB) on mobile; on desktop it's the RidesList
+       toolbar button. Hidden ≥769px. -->
+  <nav class="tabbar" aria-label="Main navigation">
+    <button
+      type="button"
+      class:active={!location.pathname.startsWith("/rides/")}
+      on:click={() => navigate("/")}
+    >
+      <List size={24} /><span>{$t("rides.title")}</span>
+    </button>
+    <button type="button" on:click={() => (statsOpen = true)}>
+      <BarChart3 size={24} /><span>{$t("stats.andBests")}</span>
+    </button>
+    <button type="button" on:click={() => (settingsOpen = true)}>
+      <SettingsIcon size={24} /><span>{$t("settings.title")}</span>
+    </button>
+  </nav>
+  <button
+    type="button"
+    class="fab"
+    title={$t("rides.upload")}
+    aria-label={$t("rides.upload")}
+    on:click={() => {
+      uploadRequest.update((n) => n + 1);
+      if (location.pathname.startsWith("/rides/")) navigate("/");
+    }}
+  >
+    <Plus size={26} />
+  </button>
+  <!-- Must live inside <Router>: StatsPanel/PowerBestsTable (inside
+       StatsSheet) render <Link>, which needs the router context (crashes
+       the sheet outside). -->
+  <BottomSheet bind:open={statsOpen} title={$t("stats.andBests")}>
+    <div class="sheet-stack" on:click={onSheetStackClick}>
+      <StatsSheet />
+    </div>
+  </BottomSheet>
+  <!-- Mobile settings: swipeable bottom sheet with a pill bar (Profil |
+       Auswertung | Räder | Daten), same pattern as the stats sheet. -->
+  {#if isMobile}
+    <BottomSheet bind:open={settingsOpen} title={$t("settings.title")}>
+      <div class="sheet-stack">
+        <SettingsSheet />
+      </div>
+    </BottomSheet>
+  {/if}
 </Router>
 
-<SettingsDialog bind:open={settingsOpen} />
+{#if !isMobile}
+  <SettingsDialog bind:open={settingsOpen} />
+{/if}
 
 <style>
   header {
     border-bottom: 1px solid var(--border);
-    padding: 12px 24px;
+    /* top inset is 0 in normal Safari (status bar is browser chrome); it only
+       becomes non-zero in standalone/fullscreen, where it keeps the header
+       content clear of the notch. */
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 24px;
     background: var(--panel);
     position: sticky;
     top: 0;
@@ -72,4 +152,67 @@
   }
   .cog:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--accent); color: var(--accent); }
   main { padding: 16px 24px 48px; }
+
+  .tabbar { display: none; }
+  .fab { display: none; }
+  .sheet-stack { display: grid; }
+  @media (max-width: 768px) {
+    .cog { display: none; } /* on mobile settings lives in the footer tab bar */
+    .fab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      right: 16px;
+      bottom: calc(132px + env(safe-area-inset-bottom));
+      width: 56px;
+      height: 56px;
+      min-height: 56px;
+      border-radius: 50%;
+      border: 0;
+      /* Same plastic orange treatment the tab-bar upload button had: subtle
+         top-lit gradient + elevation. The gradient doubles as contrast: at the
+         icon's (center) position the orange is lightened enough for APCA. */
+      background: linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--accent), rgb(252, 250, 250) 14%),
+        var(--accent)
+      );
+      box-shadow: var(--elev-1);
+      color: var(--bg); /* dark on orange: white fails WCAG AA */
+      cursor: pointer;
+      z-index: 20;
+      transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+    }
+    .fab:hover { filter: brightness(1.08); }
+    .fab:active { transform: translateY(1px); box-shadow: var(--elev-1-pressed); }
+    .tabbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      background: var(--panel);
+      border-top: 2px solid var(--border);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 10px); /* iPhone home indicator + 10px */
+    }
+    .tabbar button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center; /* bar is 72px; keep icon+label centered */
+      gap: 2px;
+      min-height: 72px;
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .tabbar button.active { color: var(--accent); }
+    /* Keep content clear of the fixed bar */
+    main { padding: 16px 16px calc(92px + env(safe-area-inset-bottom)); }
+  }
 </style>

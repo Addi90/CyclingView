@@ -1,6 +1,6 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-08-30
+**Generated:** 2026-09-02
 
 ## OVERVIEW
 Project: **Cycling View**
@@ -21,11 +21,20 @@ backend/app/
   services/        streams.py (lru_cached parquet load + LTTB downsample),
                    power_bests.py (mean-max power, windows, leaderboards, recompute)
 frontend/src/
-  App.svelte       svelte-routing shell (header, settings cog)
-  routes/          RidesList.svelte, RideDetail.svelte
+  App.svelte       svelte-routing shell: header (desktop settings cog), mobile bottom tab bar
+                   (Rides | + upload | Stats & Bests), floating settings gear FAB (mobile),
+                   stats/bests BottomSheet (must stay inside <Router>)
+  routes/          RidesList.svelte (dual layout: desktop table + aside filters / mobile cards
+                   + toolbar + filter sheet; RangeSlider distance/duration filters, pagination
+                   with mobile swipe-to-paginate (touch/mouse parallax + chevron arrow),
+                   blur loading overlay), RideDetail.svelte
   lib/             api.ts (typed fetch client — single source of API truth), i18n.ts (de/en,
-                   default de), settings.ts, charts/StreamChart.svelte (synced uPlot),
-                   RouteMap.svelte, StatsPanel.svelte, UploadDialog.svelte, PowerBestsTable.svelte
+                   default de), settings.ts, upload.ts (writable counter that opens UploadDialog
+                   from anywhere), BottomSheet.svelte (backdrop sheet: Esc / backdrop click /
+                   gated swipe-down), RangeSlider.svelte (dual-knob, two overlapping native
+                   range inputs), charts/StreamChart.svelte (synced uPlot), RouteMap.svelte,
+                   StatsPanel.svelte, PowerBestsTable.svelte, SettingsDialog.svelte,
+                   UploadDialog.svelte
 tests/backend/     pytest suite mirroring app layout (parsers/, routers/, services/)
 data/              GENERATED, gitignored: cycling.db + streams/*.parquet + uploads/
 docker/            backend.Dockerfile (python:3.12-slim), frontend.Dockerfile (node→nginx), nginx.conf
@@ -56,7 +65,7 @@ compose.yaml       docker compose: backend:8000, frontend:8080
 ## API SURFACE (summary)
 - `GET /api/health`
 - Bikes: `GET/POST /api/bikes`, `PATCH/DELETE /api/bikes/{id}` (delete refused while rides assigned)
-- Rides: `GET /api/rides?bike_id&date_from&date_to&limit&offset` → `{total, items}`; `GET/PATCH/DELETE /api/rides/{id}`
+- Rides: `GET /api/rides?bike_id&date_from&date_to&min_km&max_km&min_hours&max_hours&limit&offset` → `{total, items}` (`limit=0` = no limit); `GET /api/rides/bounds` → distance/duration min-max for filter sliders; `GET/PATCH/DELETE /api/rides/{id}` (bounds route must stay before `/{id}`)
 - Streams: `GET /api/rides/{id}/streams?fields=a,b&n_points=0` (0 = all points; else LTTB)
 - Geo: `GET /api/rides/{id}/geo` → GeoJSON LineString + parallel `streams` for color overlays
 - Upload: `POST /api/uploads` (multipart: file, name, bike_id, activity_type, description)
@@ -72,6 +81,15 @@ compose.yaml       docker compose: backend:8000, frontend:8080
 *   **CI**: `.github/workflows/backend-tests.yml` (pytest on push/PR, Python 3.13)
 
 ## NOTES
+*   **Responsive design**: one codebase; mobile ≤768px (bottom tab bar, settings FAB, bottom sheets, ride cards) vs desktop ≥769px (table + aside filters). Shared tokens live in `app.css` (`--bg/--panel/--panel-2/--border/--text/--muted/--accent`, `--touch` ≥44px, `--elev-*`); component styles are scoped. **No hardcoded colors — use the tokens.**
+*   **Anything rendering `<Link>` must stay inside `<Router>`**: svelte-routing's Link dereferences router context and throws outside it (crashed the app-level stats sheet once; the sheet is mounted inside the Router on purpose).
+*   `BottomSheet.svelte` closes on Escape, backdrop click, and swipe-down — the swipe is gated: sheet content scrolled to top AND finger not on `input/button/select/textarea/a/summary`.
+*   Pagination convention: `limit=0` = no limit (rides API), same as `n_points=0` = all points (streams API); frontend per-page 25/50/100/0 ("All"). Keep the 0-means-all convention when adding new list endpoints.
+*   Distance/duration filters (RangeSlider): bounds come from `GET /api/rides/bounds`; a knob parked on the domain edge sends **no** param (unfiltered); the list refetches on knob release, not per drag.
+*   `lib/upload.ts` exports writable counter `uploadRequest`; bumping it opens UploadDialog (used by the mobile tab bar `+`).
+*   svelte-check baseline: 3 pre-existing errors + 12 warnings (RouteMap GeoJSON typing) — don't chase; `npm run build` is the gate.
+*   iOS Safari renders `input[type=date]` wider than its CSS box (segments + clear button scale with the text-size setting) — in the mobile filter sheet the date bar can sit flush to the sheet's right edge on some devices. Blind CSS fixes (grid `1fr`, `min-width: 0`, `fit-content`, `text-align: center`) were tried and reverted without resolving it; don't retry blind, get a real-device screenshot first.
+*   Known contrast debt: `--muted` and `--accent` pass WCAG AA but fail APCA Lc 75 for small text; re-tuning the palette is a design decision, not a code fix.
 *   **Two ID schemes**: Strava-ingested activities keep their real Strava `id`; uploaded files get an id of first trackpoint timestamp in **microseconds**. Upload source files are copied to `data/uploads/` as `{id}{suffixes}`; parquet to `data/streams/{id}.parquet`.
 *   `estimated_power` flag = stream has power but Strava marked "Device Watts" false (estimated, not measured). UI surfaces it.
 *   `config.py` defaults: `data_dir = <repo>/data`, `repo_root = <repo>/`; override with `CV_DATA_DIR` / `CV_REPO_ROOT` env vars (Docker does this). CORS origins are hardcoded to localhost:5173/8080.

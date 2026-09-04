@@ -2,7 +2,11 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: extend the viewport into the notched regions so
+         env(safe-area-inset-*) is non-zero on iOS (without it every safe-area
+         inset below resolves to 0 and the sheet/tab bar tuck under the home
+         indicator). Ignored by non-iOS browsers; inset is 0 on non-notch devices. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Cycling View</title>
   </head>
   <body>

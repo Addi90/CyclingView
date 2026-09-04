@@ -12,6 +12,48 @@ def test_rides_list_contains_seeded_ride(seeded) -> None:
     assert "Morning Ride" in res.text
 
 
+def test_rides_filter_by_distance_and_duration(seeded) -> None:
+    # Seeded ride: 42 km, 5200 s (~1.44 h) moving.
+    res = seeded.get("/api/rides?min_km=40&max_km=50&min_hours=1&max_hours=2")
+    assert res.status_code == 200
+    assert res.json()["total"] == 1
+    # Out of range on either dimension excludes it.
+    assert seeded.get("/api/rides?min_km=50").json()["total"] == 0
+    assert seeded.get("/api/rides?max_km=40").json()["total"] == 0
+    assert seeded.get("/api/rides?min_hours=2").json()["total"] == 0
+    assert seeded.get("/api/rides?max_hours=1").json()["total"] == 0
+
+
+def test_rides_bounds(seeded) -> None:
+    res = seeded.get("/api/rides/bounds")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["distance_m"] == pytest.approx([42_000.0, 42_000.0])
+    assert body["moving_s"] == pytest.approx([5_200.0, 5_200.0])
+
+
+def test_rides_pagination(seeded) -> None:
+    from app.db import connect
+
+    conn = connect()
+    conn.execute(
+        "INSERT INTO activities (id, start_time, name, distance_m, moving_s) "
+        "VALUES (2, '2026-05-02T09:00:00Z', 'Second', 10000.0, 3600.0)"
+    )
+    conn.commit()
+    conn.close()
+
+    body = seeded.get("/api/rides", params={"limit": 1, "offset": 0}).json()
+    assert body["total"] == 2
+    assert [r["id"] for r in body["items"]] == [2]  # start_time DESC
+    body = seeded.get("/api/rides", params={"limit": 1, "offset": 1}).json()
+    assert [r["id"] for r in body["items"]] == [1]
+    # limit=0 means no limit.
+    assert len(seeded.get("/api/rides", params={"limit": 0}).json()["items"]) == 2
+    # Offset past the end returns an empty page.
+    assert seeded.get("/api/rides", params={"limit": 1, "offset": 2}).json()["items"] == []
+
+
 def test_ride_detail(seeded) -> None:
     res = seeded.get(f"/api/rides/{ACTIVITY_ID}")
     assert res.status_code == 200

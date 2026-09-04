@@ -30,7 +30,11 @@ def list_rides(
     bike_id: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-    limit: int = Query(100, ge=1, le=1000),
+    min_km: float | None = Query(None, ge=0),
+    max_km: float | None = Query(None, ge=0),
+    min_hours: float | None = Query(None, ge=0),
+    max_hours: float | None = Query(None, ge=0),
+    limit: int = Query(0, ge=0, description="Page size; 0 = no limit"),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     where = []
@@ -44,29 +48,56 @@ def list_rides(
     if date_to:
         where.append("a.start_time <= ?")
         params.append(date_to)
+    # Distance filters in km, duration filters in hours; DB stores m / s.
+    if min_km is not None:
+        where.append("a.distance_m >= ?")
+        params.append(min_km * 1000)
+    if max_km is not None:
+        where.append("a.distance_m <= ?")
+        params.append(max_km * 1000)
+    if min_hours is not None:
+        where.append("a.moving_s >= ?")
+        params.append(min_hours * 3600)
+    if max_hours is not None:
+        where.append("a.moving_s <= ?")
+        params.append(max_hours * 3600)
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     with get_conn() as conn:
         total = conn.execute(
             f"SELECT COUNT(*) AS c FROM activities a {where_sql}", params
         ).fetchone()["c"]
-        rows = conn.execute(
-            f"""
+        sql = f"""
             SELECT a.*, b.name AS bike_name, b.brand AS bike_brand, b.model AS bike_model
             FROM activities a
             LEFT JOIN bikes b ON a.bike_id = b.id
             {where_sql}
             ORDER BY a.start_time DESC
-            LIMIT ? OFFSET ?
-            """,
-            [*params, limit, offset],
-        ).fetchall()
+        """
+        p: list[Any] = list(params)
+        if limit > 0:
+            sql += " LIMIT ? OFFSET ?"
+            p += [limit, offset]
+        rows = conn.execute(sql, p).fetchall()
 
     return {
         "total": total,
         "limit": limit,
         "offset": offset,
         "items": [_row_to_dict(r) for r in rows],
+    }
+
+
+@router.get("/rides/bounds")
+def ride_bounds() -> dict[str, Any]:
+    """Global min/max of distance and duration; the frontend uses them as slider domains."""
+    with get_conn() as conn:
+        dmin, dmax, smin, smax = conn.execute(
+            "SELECT MIN(distance_m), MAX(distance_m), MIN(moving_s), MAX(moving_s) FROM activities"
+        ).fetchone()
+    return {
+        "distance_m": [dmin, dmax] if dmin is not None else None,
+        "moving_s": [smin, smax] if smin is not None else None,
     }
 
 

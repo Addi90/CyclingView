@@ -6,11 +6,14 @@
   import { fmtWindow, fmtPower } from "./power-format";
   import { fmtDateShort } from "./format";
   import { t } from "./i18n";
+  import PillBar from "./PillBar.svelte";
 
   /** When set, show this ride's bests; otherwise the all-time leaderboard. */
   export let activityId: number | string | null = null;
   /** Compact mode hides the "Fahrt" column and truncates dates. */
   export let compact = false;
+  /** Bump to force a re-fetch (e.g. after a ride upload). 0 = initial mount only. */
+  export let reloadKey = 0;
 
   $: title = activityId ? $t("power.bests.mean_max") : $t("power.bests.all_time");
 
@@ -44,19 +47,31 @@
 
   onMount(load);
   $: if (activityId !== undefined) load();
+  $: if (reloadKey > 0) load();
 
-  function togglePowerUnit() {
-    settings.update((s) => ({ ...s, powerUnit: s.powerUnit === "W" ? "W/kg" : "W" }));
+  function setPowerUnit(unit: "W" | "W/kg") {
+    if ($settings.powerUnit === unit) return;
+    settings.update((s) => ({ ...s, powerUnit: unit }));
   }
+
+  // W / W-kg unit toggle options (values match settings.powerUnit).
+  const unitOptions = [
+    { label: "W/kg", value: "W/kg" },
+    { label: "W", value: "W" },
+  ];
 </script>
 
 <section class="bests">
   <header>
     <h3>{title}</h3>
-    <button type="button" class="unit" on:click={togglePowerUnit}
-      title={$t("power.bests.unit_title").replace("{unit}", $settings.powerUnit).replace("{weight}", String($settings.weightKg))}>
-      {$settings.powerUnit}
-    </button>
+    <div class="unit-toggle">
+      <PillBar
+        options={unitOptions}
+        value={$settings.powerUnit}
+        on:change={(e) => setPowerUnit(e.detail)}
+        title={$t("power.bests.unit_title").replace("{unit}", $settings.powerUnit).replace("{weight}", String($settings.weightKg))}
+      />
+    </div>
   </header>
 
   {#if error}
@@ -137,16 +152,9 @@
     margin-bottom: 6px;
   }
   h3 { margin: 0; font-size: 14px; }
-  .unit {
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    border-radius: 6px;
-    padding: 2px 10px;
-    font-size: 12px;
-    cursor: pointer;
+  .unit-toggle {
+    flex: none; /* don't shrink next to the h3 in narrow panels */
   }
-  .unit:hover { background: rgba(252, 82, 0, 0.1); }
   table {
     width: 100%;
     border-collapse: collapse;

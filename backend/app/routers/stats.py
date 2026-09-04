@@ -84,7 +84,11 @@ def delete_bike(bike_id: int) -> dict[str, Any]:
 # --- Aggregated stats --------------------------------------------------------
 
 @router.get("/stats")
-def overall_stats() -> dict[str, Any]:
+def overall_stats(year: int = 0) -> dict[str, Any]:
+    """Global stats. With ?year=N the per-bike / unassigned tables are
+    restricted to that year (totals, longest and per-year stay all-time)."""
+    if year and not (1900 <= year <= 2100):
+        raise HTTPException(400, "year must be between 1900 and 2100")
     with get_conn() as conn:
         totals = dict(conn.execute(
             """
@@ -136,19 +140,24 @@ def overall_stats() -> dict[str, Any]:
                    MAX(a.start_time) AS last_ride
             FROM bikes b
             LEFT JOIN activities a ON a.bike_id = b.id
+              AND (? = 0 OR substr(a.start_time, 1, 4) = CAST(? AS TEXT))
             GROUP BY b.id, b.name
             ORDER BY distance_m DESC
-            """
+            """,
+            (year, str(year))
         ).fetchall()]
 
-        # Activities without an assigned bike.
+        # Activities without an assigned bike (same year filter).
         unassigned = dict(conn.execute(
             """
             SELECT COUNT(*) AS rides,
                    COALESCE(SUM(distance_m), 0) AS distance_m,
                    COALESCE(SUM(moving_s), 0)   AS moving_s
-            FROM activities WHERE bike_id IS NULL
-            """
+            FROM activities
+            WHERE bike_id IS NULL
+              AND (? = 0 OR substr(start_time, 1, 4) = CAST(? AS TEXT))
+            """,
+            (year, str(year))
         ).fetchone())
 
     return {

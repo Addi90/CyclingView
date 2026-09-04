@@ -16,6 +16,9 @@
   export let zones: { from: number; to: number; color: string }[] | null = null;
   export let lowQ = 0.005;
   export let highQ = 0.995;
+  /** Bump to clear any drag-to-select zoom (zero-size setSelect fires the setSelect
+   *  hook, which nulls selectionRange). uPlot 1.7+ would offer clearSelection(). */
+  export let resetSignal = 0;
 
   let container: HTMLDivElement;
   let plot: uPlot | null = null;
@@ -85,7 +88,9 @@
           stroke: AXIS_TEXT,
           grid: { stroke: GRID, width: 1 },
           ticks: { stroke: TICK, width: 1 },
-          size: 55,
+          // No explicit size: uPlot auto-sizes the axis from the label text,
+          // so the plot area stretches toward the card edge instead of
+          // always reserving 55px.
         },
       ],
       series: [
@@ -110,7 +115,6 @@
             const idx = u.cursor.idx;
             if (idx == null) {
               hoverTime.set(null);
-              selectionRange.set(null);
             } else {
               const t = u.data[0][idx];
               hoverTime.set(typeof t === "number" ? t : null);
@@ -120,8 +124,10 @@
         setSelect: [
           (u) => {
             const { left, width, show } = u.select;
+            // Zero-width is uPlot hiding its transient box (click, mouse-leave,
+            // dblclick) — NOT a zoom reset. selectionRange is our app-level zoom
+            // state: set here on drag, cleared only by the reset pill or dblclick.
             if (width <= 0 || show === false) {
-              selectionRange.set(null);
               return;
             }
             const t0 = u.posToVal(left, "x");
@@ -187,6 +193,16 @@
     if (w > 0) plot.setSize({ width: w, height });
   }
 
+  let _rs = 0;
+  $: if (resetSignal !== _rs) {
+    _rs = resetSignal;
+    plot?.setSelect({ left: 0, top: 0, width: 0, height: 0 });
+    // Drag-select also rescaled the x axis (uPlot built-in zoom) — setData with
+    // resetScales=true restores the auto scale from the full data.
+    plot?.setData(toData(), true);
+    selectionRange.set(null);
+  }
+
   let _lastZones: typeof zones = null;
 
   $: if (xs && ys && container) {
@@ -210,13 +226,20 @@
     ro = new ResizeObserver(() => resize());
     ro.observe(container);
     window.addEventListener("resize", resize);
-    container.addEventListener("mouseup", () => selectionRange.set(null));
+    // uPlot's native dblclick already runs autoScaleX() (zoom-out); mirror it
+    // for our zoom state so the reset pill + map zoom go away with it. (Also
+    // fires on touch double-tap.)
+    container.addEventListener("dblclick", onDblClick);
   });
+
+  function onDblClick() {
+    selectionRange.set(null);
+  }
 
   onDestroy(() => {
     window.removeEventListener("resize", resize);
     ro?.disconnect();
-    container?.removeEventListener("mouseup", () => selectionRange.set(null));
+    container?.removeEventListener("dblclick", onDblClick);
     plot?.destroy();
   });
 </script>
@@ -240,6 +263,10 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 14px 14px;
+  }
+  @media (max-width: 768px) {
+    .chart-card { padding: 8px 6px 10px; }
+    .title { padding-bottom: 4px; }
   }
   .title {
     font-size: 13px;
