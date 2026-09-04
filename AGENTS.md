@@ -58,7 +58,7 @@ compose.yaml       docker compose: backend:8000, frontend:8080
 
 ## CODING STANDARDS
 *   **Language**: Python 3.11+ with `from __future__ import annotations`; raw `sqlite3` (no ORM) with `Row` factory; Pydantic models for request bodies; Svelte 4 syntax (`on:click`, `new App({ target })`), TypeScript interfaces.
-*   **Style**: Routers grouped under `app/routers/` with `prefix="/api"`; services hold reusable computation (`services/streams.py`, `services/power_bests.py`); `@lru_cache` on parquet loads (must `cache_clear` on deletion — already done in the DELETE route); no frontend test framework (deliberate YAGNI); no linter/formatter configs committed.
+*   **Style**: Routers grouped under `app/routers/` with `prefix="/api"`; services hold reusable computation (`services/streams.py`, `services/power_bests.py`); `@lru_cache` on parquet loads (must `cache_clear` on deletion — already done in the DELETE route); frontend has vitest unit tests for pure logic (colocated `*.test.ts` in `src/lib/`), no component tests (deliberate YAGNI); no linter/formatter configs committed.
 *   **Data contract**: Parsers all emit the same normalized DataFrame: `t` (datetime, UTC), `lat`, `lon`, `power`, `heart_rate`, `speed`, `altitude`, `cadence`, `distance`, `temperature` (NaN for missing). `STREAM_FIELDS` in `services/streams.py` is the API-allowed field list.
 *   **Tests**: `tests/backend/conftest.py` `data_dir` fixture monkeypatches `settings.data_dir` to a temp dir and clears the `load_stream` lru_cache. **Tests must never touch the real `data/` directory.** Router tests use `api_client` (TestClient with startup events).
 
@@ -78,7 +78,7 @@ compose.yaml       docker compose: backend:8000, frontend:8080
 *   **Tests**: `tests/backend/` (root `pytest.ini`: `testpaths=tests`, `pythonpath=. backend`)
 *   **Frontend source**: `frontend/src/`
 *   **Docs/plans**: `docs/`, `README.md`
-*   **CI**: `.github/workflows/backend-tests.yml` (pytest on push/PR, Python 3.13)
+*   **CI**: `.github/workflows/backend-tests.yml` (name "tests": pytest on push/PR, Python 3.13 + `npm test`/vitest job, Node 22)
 
 ## NOTES
 *   **Responsive design**: one codebase; mobile ≤768px (bottom tab bar, settings FAB, bottom sheets, ride cards) vs desktop ≥769px (table + aside filters). Shared tokens live in `app.css` (`--bg/--panel/--panel-2/--border/--text/--muted/--accent`, `--touch` ≥44px, `--elev-*`); component styles are scoped. **No hardcoded colors — use the tokens.**
